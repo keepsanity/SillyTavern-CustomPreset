@@ -1,0 +1,13 @@
+{
+    "display_name": "Custom Preset Manager",
+    "loading_order": 1000,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "User",
+    "version": "1.0.0",
+    "homePage": "",
+    "auto_update": false
+}
+

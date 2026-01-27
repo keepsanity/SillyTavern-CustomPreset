@@ -1,0 +1,127 @@
+/* Custom Preset Manager Styles */
+
+#custom_preset_container {
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+#custom_preset_toggle_btn {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#custom_preset_panel {
+    display: none;
+    padding: 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    background-color: var(--SmartThemeBlurTintColor);
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+#custom_preset_panel.open {
+    display: block;
+}
+
+#custom_preset_select {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.custom_preset_prompt_list {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+}
+
+.custom_preset_prompt_item {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    margin-bottom: 5px;
+    background-color: var(--SmartThemeBlurTintColor);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.custom_preset_prompt_header {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    cursor: pointer;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.custom_preset_prompt_header:hover {
+    background-color: var(--SmartThemeEmColor);
+    opacity: 0.8;
+}
+
+.custom_preset_prompt_name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.custom_preset_prompt_role {
+    font-size: 0.85em;
+    opacity: 0.7;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background-color: var(--SmartThemeBorderColor);
+}
+
+.custom_preset_prompt_actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.custom_preset_prompt_actions button {
+    padding: 4px 8px;
+    font-size: 0.9em;
+    min-width: 30px;
+}
+
+.custom_preset_prompt_content {
+    display: none;
+    padding: 10px;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+    background-color: var(--SmartThemeBlurTintColor);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: monospace;
+    font-size: 0.9em;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.custom_preset_prompt_content.open {
+    display: block;
+}
+
+.custom_preset_empty_message {
+    padding: 20px;
+    text-align: center;
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.custom_preset_prompt_marker {
+    opacity: 0.5;
+    font-style: italic;
+}
+
