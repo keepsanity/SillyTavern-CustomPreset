@@ -118,30 +118,42 @@ function getPromptByIdentifier(prompts, identifier) {
 }
 
 /**
- * Get ordered prompts based on prompt_order
+ * Get prompts with linkage status based on prompt_order
  * @param {object} preset - Preset object
- * @returns {object[]} Ordered array of prompts
+ * @returns {{prompt: object, isLinked: boolean}[]} Prompt list with linkage status
  */
 function getOrderedPrompts(preset) {
     if (!preset || !preset.prompts) return [];
 
     // Find prompt_order for the global/dummy character (100001)
     const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === 100001);
+    const validPrompts = preset.prompts.filter(p => p && p.name);
+    const promptMap = new Map(validPrompts.map(prompt => [prompt.identifier, prompt]));
+    const linkedIdentifiers = new Set();
 
     if (promptOrderEntry && promptOrderEntry.order && promptOrderEntry.order.length > 0) {
-        // Return prompts in the order specified by prompt_order
+        // Return linked prompts in the order specified by prompt_order
         const orderedPrompts = [];
         for (const orderItem of promptOrderEntry.order) {
-            const prompt = getPromptByIdentifier(preset.prompts, orderItem.identifier);
+            const prompt = promptMap.get(orderItem.identifier);
             if (prompt) {
-                orderedPrompts.push(prompt);
+                orderedPrompts.push({ prompt, isLinked: true });
+                linkedIdentifiers.add(prompt.identifier);
             }
         }
+
+        // Append prompts that exist in presets but are not connected to prompt_order
+        for (const prompt of validPrompts) {
+            if (!linkedIdentifiers.has(prompt.identifier)) {
+                orderedPrompts.push({ prompt, isLinked: false });
+            }
+        }
+
         return orderedPrompts;
     }
 
-    // Fallback: return prompts as-is
-    return preset.prompts.filter(p => p && p.name);
+    // Fallback: no prompt_order means every prompt is effectively unlinked
+    return validPrompts.map(prompt => ({ prompt, isLinked: false }));
 }
 
 /**
@@ -167,7 +179,7 @@ function renderPromptList(preset) {
         return;
     }
 
-    orderedPrompts.forEach((prompt, index) => {
+    orderedPrompts.forEach(({ prompt, isLinked }) => {
         // Skip if prompt has no name or is undefined
         if (!prompt || !prompt.name) return;
 
@@ -175,6 +187,7 @@ function renderPromptList(preset) {
         const item = document.createElement('div');
         item.className = 'custom_preset_prompt_item';
         if (isMarker) item.classList.add('custom_preset_prompt_marker');
+        if (!isLinked) item.classList.add('custom_preset_prompt_unlinked');
 
         const header = document.createElement('div');
         header.className = 'custom_preset_prompt_header';
@@ -187,6 +200,14 @@ function renderPromptList(preset) {
         const role = document.createElement('span');
         role.className = 'custom_preset_prompt_role';
         role.textContent = prompt.role || 'system';
+
+        let unlinkedBadge = null;
+        if (!isLinked) {
+            unlinkedBadge = document.createElement('span');
+            unlinkedBadge.className = 'custom_preset_prompt_status';
+            unlinkedBadge.textContent = '미연결';
+            unlinkedBadge.title = 'prompt_order(character_id: 100001)에 연결되지 않은 프롬프트';
+        }
 
         const actions = document.createElement('div');
         actions.className = 'custom_preset_prompt_actions';
@@ -218,6 +239,7 @@ function renderPromptList(preset) {
 
         header.appendChild(name);
         header.appendChild(role);
+        if (unlinkedBadge) header.appendChild(unlinkedBadge);
         header.appendChild(actions);
 
         // Content area (toggle)
