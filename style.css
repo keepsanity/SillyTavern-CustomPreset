@@ -34,6 +34,28 @@
     margin-bottom: 10px;
 }
 
+.custom_preset_search_row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+#custom_preset_search_input {
+    flex: 1;
+    min-width: 0;
+}
+
+#custom_preset_search_btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+#custom_preset_clear_btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .custom_preset_prompt_list {
     max-height: 400px;
     overflow-y: auto;

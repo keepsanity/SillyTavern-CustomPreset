@@ -5,6 +5,35 @@ const EXTENSION_NAME = 'SillyTavern-CustomPreset';
 
 let isPanelOpen = false;
 
+function getSearchKeyword() {
+    const searchInput = document.getElementById('custom_preset_search_input');
+    return (searchInput?.value || '').trim().toLowerCase();
+}
+
+function matchesSearch(prompt, keyword) {
+    if (!keyword) return true;
+    const name = (prompt.name || '').toLowerCase();
+    const role = (prompt.role || '').toLowerCase();
+    const content = (prompt.content || '').toLowerCase();
+    return name.includes(keyword) || role.includes(keyword) || content.includes(keyword);
+}
+
+function triggerSearch() {
+    const select = document.getElementById('custom_preset_select');
+    if (!select) return;
+    const preset = getPresetByName(select.value);
+    renderPromptList(preset);
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('custom_preset_search_input');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    triggerSearch();
+}
+
 /**
  * Get all preset names
  * @returns {string[]} Array of preset names
@@ -173,13 +202,22 @@ function renderPromptList(preset) {
 
     // Get prompts in the correct order
     const orderedPrompts = getOrderedPrompts(preset);
+    const keyword = getSearchKeyword();
+    const filteredPrompts = orderedPrompts.filter(({ prompt }) => matchesSearch(prompt, keyword));
 
     if (orderedPrompts.length === 0) {
         listContainer.innerHTML = '<div class="custom_preset_empty_message">이 프리셋에는 프롬프트가 없습니다.</div>';
         return;
     }
 
-    orderedPrompts.forEach(({ prompt, isLinked }) => {
+    if (filteredPrompts.length === 0) {
+        listContainer.innerHTML = keyword
+            ? '<div class="custom_preset_empty_message">검색 결과가 없습니다.</div>'
+            : '<div class="custom_preset_empty_message">이 프리셋에는 프롬프트가 없습니다.</div>';
+        return;
+    }
+
+    filteredPrompts.forEach(({ prompt, isLinked }) => {
         // Skip if prompt has no name or is undefined
         if (!prompt || !prompt.name) return;
 
@@ -363,6 +401,38 @@ function createUI() {
     select.className = 'text_pole';
     select.addEventListener('change', onPresetSelectChange);
 
+    // Create search controls
+    const searchRow = document.createElement('div');
+    searchRow.className = 'custom_preset_search_row';
+
+    const searchInput = document.createElement('input');
+    searchInput.id = 'custom_preset_search_input';
+    searchInput.className = 'text_pole';
+    searchInput.type = 'text';
+    searchInput.placeholder = '프롬프트 검색 (이름/role/내용)';
+    searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            triggerSearch();
+        }
+    });
+
+    const searchBtn = document.createElement('button');
+    searchBtn.id = 'custom_preset_search_btn';
+    searchBtn.className = 'menu_button';
+    searchBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> 검색';
+    searchBtn.addEventListener('click', triggerSearch);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.id = 'custom_preset_clear_btn';
+    clearBtn.className = 'menu_button';
+    clearBtn.textContent = '초기화';
+    clearBtn.addEventListener('click', clearSearch);
+
+    searchRow.appendChild(searchInput);
+    searchRow.appendChild(searchBtn);
+    searchRow.appendChild(clearBtn);
+
     // Create prompt list container
     const promptList = document.createElement('div');
     promptList.id = 'custom_preset_prompt_list';
@@ -371,6 +441,7 @@ function createUI() {
     // Assemble panel
     panel.appendChild(selectLabel);
     panel.appendChild(select);
+    panel.appendChild(searchRow);
     panel.appendChild(promptList);
 
     // Assemble container
