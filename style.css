@@ -56,6 +56,22 @@
     white-space: nowrap;
 }
 
+.custom_preset_quick_toggle_row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#custom_preset_quick_toggle_name {
+    flex: 1;
+    min-width: 0;
+}
+
+.custom_preset_quick_toggle_checkbox {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .custom_preset_prompt_list {
     max-height: 400px;
     overflow-y: auto;
@@ -159,5 +175,29 @@
     background-color: rgba(255, 165, 0, 0.2);
     border: 1px solid rgba(255, 165, 0, 0.55);
     color: inherit;
+}
+
+.custom_preset_quick_toggle_bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.custom_preset_quick_toggle_button {
+    border: 1px solid var(--SmartThemeBorderColor);
+    width: auto !important;
+    flex: 0 0 auto;
+    display: inline-flex;
+}
+
+.custom_preset_quick_toggle_button.is_disabled {
+    opacity: 0.45;
+    filter: grayscale(0.7);
 }
 

@@ -1,9 +1,18 @@
-import { openai_settings, openai_setting_names, promptManager } from '../../../openai.js';
+import { openai_settings, openai_setting_names, oai_settings, promptManager } from '../../../openai.js';
 import { uuidv4 } from '../../../utils.js';
+import { extension_settings } from '../../../extensions.js';
+import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
 
 const EXTENSION_NAME = 'SillyTavern-CustomPreset';
+const QUICK_TOGGLE_NAME_KEY = 'quick_prompt_toggle_name';
+const QUICK_TOGGLE_ENABLED_KEY = 'quick_prompt_toggle_enabled';
+const FEATURE_DEFAULTS = {
+    showPresetCustomizerButton: true,
+    showQuickPromptToggleFeature: true,
+};
 
 let isPanelOpen = false;
+let quickPopupObserver = null;
 
 function getSearchKeyword() {
     const searchInput = document.getElementById('custom_preset_search_input');
@@ -34,6 +43,44 @@ function clearSearch() {
     triggerSearch();
 }
 
+function getFeatureSettings() {
+    if (!extension_settings[EXTENSION_NAME] || typeof extension_settings[EXTENSION_NAME] !== 'object') {
+        extension_settings[EXTENSION_NAME] = { ...FEATURE_DEFAULTS };
+    }
+    return extension_settings[EXTENSION_NAME];
+}
+
+function saveFeatureSettings() {
+    extension_settings[EXTENSION_NAME] = getFeatureSettings();
+    saveSettingsDebounced();
+}
+
+function isQuickToggleFeatureEnabled() {
+    return getFeatureSettings().showQuickPromptToggleFeature !== false;
+}
+
+function getCurrentPresetName() {
+    if (oai_settings?.preset_settings_openai) {
+        return oai_settings.preset_settings_openai;
+    }
+    const select = document.getElementById('custom_preset_select');
+    return select?.value || '';
+}
+
+function getCurrentPreset() {
+    const presetName = getCurrentPresetName();
+    if (!presetName) return null;
+    return getPresetByName(presetName);
+}
+
+function getActivePromptManagerPreset() {
+    const serviceSettings = promptManager?.serviceSettings;
+    if (serviceSettings?.prompts && serviceSettings?.prompt_order) {
+        return serviceSettings;
+    }
+    return getCurrentPreset();
+}
+
 /**
  * Get all preset names
  * @returns {string[]} Array of preset names
@@ -51,6 +98,119 @@ function getPresetByName(name) {
     const index = openai_setting_names[name];
     if (index === undefined) return null;
     return openai_settings[index];
+}
+
+function ensureQuickTogglePopupControls() {
+    const orderBlock = document.getElementById('completion_prompt_manager_order_block');
+    if (!orderBlock || document.getElementById('custom_preset_quick_toggle_block')) return;
+
+    const baseRow = orderBlock.parentElement;
+    if (!baseRow) return;
+
+    const quickRow = document.createElement('div');
+    quickRow.id = 'custom_preset_quick_toggle_row_container';
+    quickRow.className = 'flex-container gap10px';
+
+    const quickBlock = document.createElement('div');
+    quickBlock.id = 'custom_preset_quick_toggle_block';
+    quickBlock.className = 'completion_prompt_manager_popup_entry_form_control flex1';
+
+    const title = document.createElement('label');
+    title.textContent = '빠른 프롬프트 토글';
+    title.style.display = 'block';
+    title.style.marginBottom = '5px';
+
+    const row = document.createElement('div');
+    row.className = 'custom_preset_quick_toggle_row';
+
+    const nameInput = document.createElement('input');
+    nameInput.id = 'custom_preset_quick_toggle_name';
+    nameInput.className = 'text_pole';
+    nameInput.type = 'text';
+    nameInput.placeholder = '토글 버튼 이름';
+
+    const enableLabel = document.createElement('label');
+    enableLabel.className = 'checkbox_label custom_preset_quick_toggle_checkbox';
+    enableLabel.title = '체크 시 빠른 토글 버튼 표시';
+
+    const enableCheckbox = document.createElement('input');
+    enableCheckbox.id = 'custom_preset_quick_toggle_enabled';
+    enableCheckbox.type = 'checkbox';
+
+    const enableText = document.createElement('span');
+    enableText.textContent = '사용';
+
+    enableLabel.appendChild(enableCheckbox);
+    enableLabel.appendChild(enableText);
+    row.appendChild(nameInput);
+    row.appendChild(enableLabel);
+    quickBlock.appendChild(title);
+    quickBlock.appendChild(row);
+    quickRow.appendChild(quickBlock);
+    baseRow.insertAdjacentElement('afterend', quickRow);
+}
+
+function readQuickToggleForm() {
+    const nameInput = document.getElementById('custom_preset_quick_toggle_name');
+    const enabledInput = document.getElementById('custom_preset_quick_toggle_enabled');
+    return {
+        name: (nameInput?.value || '').trim(),
+        enabled: !!enabledInput?.checked,
+    };
+}
+
+function loadQuickToggleFormForPrompt(promptId) {
+    ensureQuickTogglePopupControls();
+    const nameInput = document.getElementById('custom_preset_quick_toggle_name');
+    const enabledInput = document.getElementById('custom_preset_quick_toggle_enabled');
+    const quickBlock = document.getElementById('custom_preset_quick_toggle_block');
+    if (!nameInput || !enabledInput || !quickBlock) return;
+
+    quickBlock.style.display = isQuickToggleFeatureEnabled() ? '' : 'none';
+
+    const prompt = promptManager?.getPromptById?.(promptId);
+    if (!prompt) {
+        nameInput.value = '';
+        enabledInput.checked = false;
+        return;
+    }
+
+    nameInput.value = (prompt[QUICK_TOGGLE_NAME_KEY] || '').trim();
+    enabledInput.checked = !!prompt[QUICK_TOGGLE_ENABLED_KEY];
+}
+
+function applyQuickToggleDataToPrompt(promptId, quickData) {
+    const prompt = promptManager?.getPromptById?.(promptId);
+    if (!prompt) return;
+    prompt[QUICK_TOGGLE_NAME_KEY] = quickData.name;
+    prompt[QUICK_TOGGLE_ENABLED_KEY] = !!quickData.enabled;
+    promptManager.saveServiceSettings?.();
+    renderQuickToggleButtons();
+}
+
+function observePromptPopupChanges() {
+    const saveBtn = document.getElementById('completion_prompt_manager_popup_entry_form_save');
+    if (!saveBtn) return;
+
+    // Capture values before PromptManager closes the popup
+    saveBtn.addEventListener('click', () => {
+        const promptId = saveBtn.dataset.pmPrompt;
+        if (!promptId) return;
+        const quickData = readQuickToggleForm();
+        setTimeout(() => applyQuickToggleDataToPrompt(promptId, quickData), 0);
+    }, true);
+
+    if (quickPopupObserver) return;
+
+    quickPopupObserver = new MutationObserver(() => {
+        loadQuickToggleFormForPrompt(saveBtn.dataset.pmPrompt);
+    });
+    quickPopupObserver.observe(saveBtn, {
+        attributes: true,
+        attributeFilter: ['data-pm-prompt'],
+    });
+
+    loadQuickToggleFormForPrompt(saveBtn.dataset.pmPrompt);
 }
 
 /**
@@ -149,7 +309,7 @@ function getPromptByIdentifier(prompts, identifier) {
 /**
  * Get prompts with linkage status based on prompt_order
  * @param {object} preset - Preset object
- * @returns {{prompt: object, isLinked: boolean}[]} Prompt list with linkage status
+ * @returns {{prompt: object, isLinked: boolean, isEnabled: boolean}[]} Prompt list with linkage status
  */
 function getOrderedPrompts(preset) {
     if (!preset || !preset.prompts) return [];
@@ -166,7 +326,7 @@ function getOrderedPrompts(preset) {
         for (const orderItem of promptOrderEntry.order) {
             const prompt = promptMap.get(orderItem.identifier);
             if (prompt) {
-                orderedPrompts.push({ prompt, isLinked: true });
+                orderedPrompts.push({ prompt, isLinked: true, isEnabled: !!orderItem.enabled });
                 linkedIdentifiers.add(prompt.identifier);
             }
         }
@@ -174,7 +334,7 @@ function getOrderedPrompts(preset) {
         // Append prompts that exist in presets but are not connected to prompt_order
         for (const prompt of validPrompts) {
             if (!linkedIdentifiers.has(prompt.identifier)) {
-                orderedPrompts.push({ prompt, isLinked: false });
+                orderedPrompts.push({ prompt, isLinked: false, isEnabled: false });
             }
         }
 
@@ -182,7 +342,84 @@ function getOrderedPrompts(preset) {
     }
 
     // Fallback: no prompt_order means every prompt is effectively unlinked
-    return validPrompts.map(prompt => ({ prompt, isLinked: false }));
+    return validPrompts.map(prompt => ({ prompt, isLinked: false, isEnabled: false }));
+}
+
+function getLinkedQuickTogglePrompts(preset) {
+    if (!preset) return [];
+    return getOrderedPrompts(preset)
+        .filter(({ prompt, isLinked }) =>
+            isLinked &&
+            !!prompt[QUICK_TOGGLE_ENABLED_KEY] &&
+            !!String(prompt[QUICK_TOGGLE_NAME_KEY] || '').trim(),
+        );
+}
+
+function togglePromptEnabledByIdentifier(preset, identifier) {
+    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === 100001);
+    if (!promptOrderEntry?.order) return;
+    const target = promptOrderEntry.order.find(item => item.identifier === identifier);
+    if (!target) return;
+    target.enabled = !target.enabled;
+    promptManager?.saveServiceSettings?.();
+    promptManager?.render?.();
+}
+
+function renderQuickToggleButtons() {
+    const existingBar = document.getElementById('custom_preset_quick_toggle_bar');
+    if (existingBar) existingBar.remove();
+
+    if (!isQuickToggleFeatureEnabled()) return;
+
+    const sendForm = document.getElementById('send_form');
+    if (!sendForm) return;
+
+    const preset = getActivePromptManagerPreset();
+    const quickPrompts = getLinkedQuickTogglePrompts(preset);
+    if (quickPrompts.length === 0) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'custom_preset_quick_toggle_bar';
+    bar.className = 'custom_preset_quick_toggle_bar';
+
+    quickPrompts.forEach(({ prompt, isEnabled }) => {
+        const button = document.createElement('button');
+        button.className = 'menu_button custom_preset_quick_toggle_button';
+        if (!isEnabled) button.classList.add('is_disabled');
+        button.textContent = String(prompt[QUICK_TOGGLE_NAME_KEY]).trim();
+        button.title = `프롬프트 "${prompt.name}" 토글`;
+        button.addEventListener('click', () => {
+            togglePromptEnabledByIdentifier(getActivePromptManagerPreset(), prompt.identifier);
+            renderQuickToggleButtons();
+        });
+        bar.appendChild(button);
+    });
+
+    const qrBar = document.getElementById('qr--bar');
+    const ggQrContainer = document.getElementById('gg-qr-container');
+    const ggActionContainer = document.getElementById('gg-action-button-container');
+
+    if (ggActionContainer?.parentElement) {
+        ggActionContainer.parentElement.insertBefore(bar, ggActionContainer);
+        return;
+    }
+
+    if (ggQrContainer?.parentElement) {
+        ggQrContainer.parentElement.insertBefore(bar, ggQrContainer);
+        return;
+    }
+
+    if (qrBar?.parentElement) {
+        qrBar.parentElement.insertBefore(bar, qrBar);
+        return;
+    }
+
+    const anchor = document.getElementById('nonQRFormItems') || sendForm.firstElementChild;
+    if (anchor?.parentElement === sendForm) {
+        sendForm.insertBefore(bar, anchor);
+    } else {
+        sendForm.prepend(bar);
+    }
 }
 
 /**
@@ -306,6 +543,120 @@ function onPresetSelectChange() {
     const presetName = select.value;
     const preset = getPresetByName(presetName);
     renderPromptList(preset);
+    renderQuickToggleButtons();
+}
+
+function createExtensionSettingsMenu() {
+    if (document.getElementById('custom_preset_settings_container')) return;
+
+    const settingsRoot = document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
+    if (!settingsRoot) return;
+
+    const settings = getFeatureSettings();
+    const container = document.createElement('div');
+    container.id = 'custom_preset_settings_container';
+    container.className = 'extension_container custom_preset_settings';
+
+    const drawer = document.createElement('div');
+    drawer.className = 'inline-drawer';
+
+    const drawerHeader = document.createElement('div');
+    drawerHeader.className = 'inline-drawer-toggle inline-drawer-header';
+
+    const headerTitle = document.createElement('b');
+    headerTitle.textContent = '커스텀 프리셋 매니저';
+
+    const headerIcon = document.createElement('div');
+    headerIcon.className = 'inline-drawer-icon fa-solid fa-circle-chevron-down down interactable';
+    headerIcon.tabIndex = 0;
+    headerIcon.setAttribute('role', 'button');
+
+    drawerHeader.appendChild(headerTitle);
+    drawerHeader.appendChild(headerIcon);
+
+    const drawerContent = document.createElement('div');
+    drawerContent.className = 'inline-drawer-content';
+
+    const row1 = document.createElement('label');
+    row1.className = 'checkbox_label';
+    row1.setAttribute('for', 'custom_preset_show_customizer_btn');
+    const toggleCustomizer = document.createElement('input');
+    toggleCustomizer.id = 'custom_preset_show_customizer_btn';
+    toggleCustomizer.type = 'checkbox';
+    toggleCustomizer.className = 'extension_enabled';
+    toggleCustomizer.checked = settings.showPresetCustomizerButton !== false;
+    const text1 = document.createElement('span');
+    text1.innerHTML = '<strong>프리셋 커스텀하기 버튼 표시</strong>';
+    row1.appendChild(toggleCustomizer);
+    row1.appendChild(text1);
+
+    const note1 = document.createElement('small');
+    note1.className = 'notes';
+    note1.textContent = '프롬프트 매니저 상단의 "프리셋 커스텀하기" 버튼을 표시/숨김합니다.';
+
+    const separator = document.createElement('hr');
+    separator.className = 'm-t-1 m-b-1';
+
+    const row2 = document.createElement('label');
+    row2.className = 'checkbox_label';
+    row2.setAttribute('for', 'custom_preset_show_quick_toggle_feature');
+    const toggleQuickFeature = document.createElement('input');
+    toggleQuickFeature.id = 'custom_preset_show_quick_toggle_feature';
+    toggleQuickFeature.type = 'checkbox';
+    toggleQuickFeature.className = 'extension_enabled';
+    toggleQuickFeature.checked = settings.showQuickPromptToggleFeature !== false;
+    const text2 = document.createElement('span');
+    text2.innerHTML = '<strong>빠른 프롬프트 토글 표시</strong>';
+    row2.appendChild(toggleQuickFeature);
+    row2.appendChild(text2);
+
+    const note2 = document.createElement('small');
+    note2.className = 'notes';
+    note2.textContent = '프롬프트 편집의 빠른 토글 항목과 인풋 위 토글 버튼을 표시/숨김합니다.';
+
+    toggleCustomizer.addEventListener('change', () => {
+        settings.showPresetCustomizerButton = !!toggleCustomizer.checked;
+        saveFeatureSettings();
+        applyFeatureVisibility();
+    });
+
+    toggleQuickFeature.addEventListener('change', () => {
+        settings.showQuickPromptToggleFeature = !!toggleQuickFeature.checked;
+        saveFeatureSettings();
+        applyFeatureVisibility();
+    });
+
+    drawerContent.appendChild(row1);
+    drawerContent.appendChild(note1);
+    // drawerContent.appendChild(separator);
+    drawerContent.appendChild(row2);
+    drawerContent.appendChild(note2);
+    drawer.appendChild(drawerHeader);
+    drawer.appendChild(drawerContent);
+    container.appendChild(drawer);
+    settingsRoot.appendChild(container);
+}
+
+function applyFeatureVisibility() {
+    const settings = getFeatureSettings();
+    const customizerBtn = document.getElementById('custom_preset_toggle_btn');
+    const panel = document.getElementById('custom_preset_panel');
+
+    if (customizerBtn) {
+        customizerBtn.style.display = settings.showPresetCustomizerButton !== false ? '' : 'none';
+    }
+
+    if (settings.showPresetCustomizerButton === false && panel) {
+        panel.classList.remove('open');
+        isPanelOpen = false;
+    }
+
+    const quickBlock = document.getElementById('custom_preset_quick_toggle_block');
+    if (quickBlock) {
+        quickBlock.style.display = settings.showQuickPromptToggleFeature !== false ? '' : 'none';
+    }
+
+    renderQuickToggleButtons();
 }
 
 /**
@@ -483,6 +834,17 @@ async function init() {
     }
 
     createUI();
+    createExtensionSettingsMenu();
+    ensureQuickTogglePopupControls();
+    observePromptPopupChanges();
+    applyFeatureVisibility();
+    renderQuickToggleButtons();
+
+    eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
+        if (isPanelOpen) populatePresetSelect();
+        renderQuickToggleButtons();
+    });
+
     console.log(`[${EXTENSION_NAME}] Initialized successfully`);
 }
 
