@@ -189,6 +189,18 @@
     box-sizing: border-box;
 }
 
+.custom_preset_quick_toggle_bar-collapsed {
+    display: none;
+}
+
+.custom_preset_quick_toggle_bar-expanded {
+    display: flex;
+}
+
+#custom_preset_quick_toggle_button {
+    order: 5;
+}
+
 .custom_preset_quick_toggle_button {
     border: 1px solid var(--SmartThemeBorderColor);
     width: auto !important;

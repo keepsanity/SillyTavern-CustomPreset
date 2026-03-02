@@ -9,10 +9,13 @@ const QUICK_TOGGLE_ENABLED_KEY = 'quick_prompt_toggle_enabled';
 const FEATURE_DEFAULTS = {
     showPresetCustomizerButton: true,
     showQuickPromptToggleFeature: true,
+    showQuickPromptToggleCollapseFeature: true,
+    quickPromptToggleBarCollapsed: false,
 };
 
 let isPanelOpen = false;
 let quickPopupObserver = null;
+let quickToggleButtonListenerAttached = false;
 
 function getSearchKeyword() {
     const searchInput = document.getElementById('custom_preset_search_input');
@@ -57,6 +60,20 @@ function saveFeatureSettings() {
 
 function isQuickToggleFeatureEnabled() {
     return getFeatureSettings().showQuickPromptToggleFeature !== false;
+}
+
+function isQuickToggleCollapseFeatureEnabled() {
+    return getFeatureSettings().showQuickPromptToggleCollapseFeature !== false;
+}
+
+function isQuickToggleBarCollapsed() {
+    return getFeatureSettings().quickPromptToggleBarCollapsed === true;
+}
+
+function setQuickToggleBarCollapsed(collapsed) {
+    const settings = getFeatureSettings();
+    settings.quickPromptToggleBarCollapsed = !!collapsed;
+    saveFeatureSettings();
 }
 
 function getCurrentPresetName() {
@@ -365,22 +382,87 @@ function togglePromptEnabledByIdentifier(preset, identifier) {
     promptManager?.render?.();
 }
 
+function createQuickToggleCollapseButtonElement() {
+    const button = document.createElement('div');
+    button.id = 'custom_preset_quick_toggle_button';
+    button.className = 'far fa-caret-square-up interactable';
+    button.tabIndex = 0;
+    button.style.display = 'none';
+    button.title = '빠른 프롬프트 토글 펼치기';
+    return button;
+}
+
+function attachQuickToggleCollapseButtonListener(buttonElement) {
+    if (quickToggleButtonListenerAttached) return;
+    buttonElement.addEventListener('click', () => {
+        setQuickToggleBarCollapsed(!isQuickToggleBarCollapsed());
+        renderQuickToggleButtons();
+    });
+    quickToggleButtonListenerAttached = true;
+}
+
+function ensureQuickToggleCollapseButton() {
+    let toggleButton = document.getElementById('custom_preset_quick_toggle_button');
+    const extensionsMenuButton = document.getElementById('extensionsMenuButton');
+
+    if (!toggleButton && extensionsMenuButton) {
+        toggleButton = createQuickToggleCollapseButtonElement();
+        extensionsMenuButton.insertAdjacentElement('afterend', toggleButton);
+        attachQuickToggleCollapseButtonListener(toggleButton);
+    } else if (toggleButton && !quickToggleButtonListenerAttached) {
+        attachQuickToggleCollapseButtonListener(toggleButton);
+    }
+
+    return toggleButton;
+}
+
+function updateQuickToggleCollapseButtonState(hasQuickPrompts) {
+    const toggleButton = ensureQuickToggleCollapseButton();
+    if (!toggleButton) return;
+
+    const visible = isQuickToggleFeatureEnabled() && isQuickToggleCollapseFeatureEnabled() && hasQuickPrompts;
+    toggleButton.style.display = visible ? 'flex' : 'none';
+
+    if (!visible) return;
+
+    if (isQuickToggleBarCollapsed()) {
+        toggleButton.className = 'far fa-caret-square-up interactable';
+        toggleButton.title = '빠른 프롬프트 토글 펼치기';
+    } else {
+        toggleButton.className = 'fas fa-caret-square-down interactable';
+        toggleButton.title = '빠른 프롬프트 토글 접기';
+    }
+}
+
 function renderQuickToggleButtons() {
     const existingBar = document.getElementById('custom_preset_quick_toggle_bar');
     if (existingBar) existingBar.remove();
 
-    if (!isQuickToggleFeatureEnabled()) return;
+    if (!isQuickToggleFeatureEnabled()) {
+        updateQuickToggleCollapseButtonState(false);
+        return;
+    }
 
     const sendForm = document.getElementById('send_form');
-    if (!sendForm) return;
+    if (!sendForm) {
+        updateQuickToggleCollapseButtonState(false);
+        return;
+    }
 
     const preset = getActivePromptManagerPreset();
     const quickPrompts = getLinkedQuickTogglePrompts(preset);
-    if (quickPrompts.length === 0) return;
+    if (quickPrompts.length === 0) {
+        updateQuickToggleCollapseButtonState(false);
+        return;
+    }
+
+    const collapsed = isQuickToggleCollapseFeatureEnabled() ? isQuickToggleBarCollapsed() : false;
 
     const bar = document.createElement('div');
     bar.id = 'custom_preset_quick_toggle_bar';
-    bar.className = 'custom_preset_quick_toggle_bar';
+    bar.className = `custom_preset_quick_toggle_bar ${collapsed
+        ? 'custom_preset_quick_toggle_bar-collapsed'
+        : 'custom_preset_quick_toggle_bar-expanded'}`;
 
     quickPrompts.forEach(({ prompt, isEnabled }) => {
         const button = document.createElement('button');
@@ -394,6 +476,7 @@ function renderQuickToggleButtons() {
         });
         bar.appendChild(button);
     });
+    updateQuickToggleCollapseButtonState(true);
 
     const qrBar = document.getElementById('qr--bar');
     const ggQrContainer = document.getElementById('gg-qr-container');
@@ -614,6 +697,23 @@ function createExtensionSettingsMenu() {
     note2.className = 'notes';
     note2.textContent = '프롬프트 편집의 빠른 토글 항목과 인풋 위 토글 버튼을 표시/숨김합니다.';
 
+    const row3 = document.createElement('label');
+    row3.className = 'checkbox_label';
+    row3.setAttribute('for', 'custom_preset_show_quick_toggle_collapse_feature');
+    const toggleQuickCollapseFeature = document.createElement('input');
+    toggleQuickCollapseFeature.id = 'custom_preset_show_quick_toggle_collapse_feature';
+    toggleQuickCollapseFeature.type = 'checkbox';
+    toggleQuickCollapseFeature.className = 'extension_enabled';
+    toggleQuickCollapseFeature.checked = settings.showQuickPromptToggleCollapseFeature !== false;
+    const text3 = document.createElement('span');
+    text3.innerHTML = '<strong>빠른 토글 접기기능 활성화</strong>';
+    row3.appendChild(toggleQuickCollapseFeature);
+    row3.appendChild(text3);
+
+    const note3 = document.createElement('small');
+    note3.className = 'notes';
+    note3.textContent = '입력창 상단의 빠른 토글 바 접기/펼치기 버튼을 표시합니다.';
+
     toggleCustomizer.addEventListener('change', () => {
         settings.showPresetCustomizerButton = !!toggleCustomizer.checked;
         saveFeatureSettings();
@@ -626,11 +726,22 @@ function createExtensionSettingsMenu() {
         applyFeatureVisibility();
     });
 
+    toggleQuickCollapseFeature.addEventListener('change', () => {
+        settings.showQuickPromptToggleCollapseFeature = !!toggleQuickCollapseFeature.checked;
+        if (!settings.showQuickPromptToggleCollapseFeature) {
+            settings.quickPromptToggleBarCollapsed = false;
+        }
+        saveFeatureSettings();
+        applyFeatureVisibility();
+    });
+
     drawerContent.appendChild(row1);
     drawerContent.appendChild(note1);
     // drawerContent.appendChild(separator);
     drawerContent.appendChild(row2);
     drawerContent.appendChild(note2);
+    drawerContent.appendChild(row3);
+    drawerContent.appendChild(note3);
     drawer.appendChild(drawerHeader);
     drawer.appendChild(drawerContent);
     container.appendChild(drawer);
@@ -654,6 +765,11 @@ function applyFeatureVisibility() {
     const quickBlock = document.getElementById('custom_preset_quick_toggle_block');
     if (quickBlock) {
         quickBlock.style.display = settings.showQuickPromptToggleFeature !== false ? '' : 'none';
+    }
+
+    if (settings.showQuickPromptToggleCollapseFeature === false && settings.quickPromptToggleBarCollapsed) {
+        settings.quickPromptToggleBarCollapsed = false;
+        saveFeatureSettings();
     }
 
     renderQuickToggleButtons();
@@ -837,11 +953,16 @@ async function init() {
     createExtensionSettingsMenu();
     ensureQuickTogglePopupControls();
     observePromptPopupChanges();
+    ensureQuickToggleCollapseButton();
     applyFeatureVisibility();
     renderQuickToggleButtons();
 
     eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
         if (isPanelOpen) populatePresetSelect();
+        renderQuickToggleButtons();
+    });
+
+    eventSource.on(event_types.CHAT_CHANGED, () => {
         renderQuickToggleButtons();
     });
 
