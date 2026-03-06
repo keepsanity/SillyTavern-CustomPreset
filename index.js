@@ -2,8 +2,102 @@ import { openai_settings, openai_setting_names, oai_settings, promptManager } fr
 import { uuidv4 } from '../../../utils.js';
 import { extension_settings } from '../../../extensions.js';
 import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
+import { getCurrentLocale } from '../../../i18n.js';
 
 const EXTENSION_NAME = 'SillyTavern-CustomPreset';
+
+const L = (() => {
+    const ko = {
+        quickPromptToggle: '빠른 프롬프트 토글',
+        toggleButtonName: '토글 버튼 이름',
+        checkToShowToggle: '체크 시 빠른 토글 버튼 표시',
+        use: '사용',
+        promptPosition: '프롬프트 위치',
+        promptPositionHint: '선택한 프롬프트 아래에 위치하게 됩니다.',
+        selectPosition: '-- 위치 선택 --',
+        copiedToClipboard: '클립보드에 복사되었습니다.',
+        copyFailed: '복사에 실패했습니다.',
+        promptManagerNotInit: '프롬프트 매니저가 초기화되지 않았습니다.',
+        promptAdded: (name) => `프롬프트 "${name}"이(가) 추가되었습니다.`,
+        selectInsertPosition: '프롬프트 삽입 위치 선택',
+        insertBelowSelected: '선택한 프롬프트 아래에 삽입됩니다.',
+        cancel: '취소',
+        confirm: '확인',
+        expandToggle: '빠른 프롬프트 토글 펼치기',
+        collapseToggle: '빠른 프롬프트 토글 접기',
+        togglePrompt: (name) => `프롬프트 "${name}" 토글`,
+        noPromptsInPreset: '이 프리셋에는 프롬프트가 없습니다.',
+        noSearchResults: '검색 결과가 없습니다.',
+        unlinked: '미연결',
+        unlinkedTitle: 'prompt_order(character_id: 100001)에 연결되지 않은 프롬프트',
+        copyContent: '내용 복사',
+        addToManager: '프롬프트 매니저에 추가',
+        markerNoContent: '(마커 - 내용 없음)',
+        noContent: '(내용 없음)',
+        customPresetManager: '커스텀 프리셋 매니저',
+        showPresetCustomizeBtn: '프리셋 커스텀하기 버튼 표시',
+        showPresetCustomizeBtnNote: '프롬프트 매니저 상단의 "프리셋 커스텀하기" 버튼을 표시/숨김합니다.',
+        showQuickToggle: '빠른 프롬프트 토글 표시',
+        showQuickToggleNote: '프롬프트 편집의 빠른 토글 항목과 인풋 위 토글 버튼을 표시/숨김합니다.',
+        enableCollapseToggle: '빠른 토글 접기기능 활성화',
+        enableCollapseToggleNote: '입력창 상단의 빠른 토글 바 접기/펼치기 버튼을 표시합니다.',
+        enablePositionSelect: '프롬프트 위치 정하기',
+        enablePositionSelectNote: '프롬프트 추가 시 위치를 선택하고, 편집에서 위치를 변경할 수 있습니다.',
+        closePresetCustom: '프리셋 커스텀 닫기',
+        openPresetCustom: '프리셋 커스텀하기',
+        noPresets: '프리셋이 없습니다',
+        selectPreset: '프리셋 선택:',
+        searchPlaceholder: '프롬프트 검색 (이름/role/내용)',
+        search: '검색',
+        reset: '초기화',
+    };
+    const en = {
+        quickPromptToggle: 'Quick Prompt Toggle',
+        toggleButtonName: 'Toggle button name',
+        checkToShowToggle: 'Check to show quick toggle button',
+        use: 'Use',
+        promptPosition: 'Prompt Position',
+        promptPositionHint: 'Will be placed below the selected prompt.',
+        selectPosition: '-- Select position --',
+        copiedToClipboard: 'Copied to clipboard.',
+        copyFailed: 'Failed to copy.',
+        promptManagerNotInit: 'Prompt manager is not initialized.',
+        promptAdded: (name) => `Prompt "${name}" has been added.`,
+        selectInsertPosition: 'Select Insert Position',
+        insertBelowSelected: 'Will be inserted below the selected prompt.',
+        cancel: 'Cancel',
+        confirm: 'Confirm',
+        expandToggle: 'Expand quick prompt toggle',
+        collapseToggle: 'Collapse quick prompt toggle',
+        togglePrompt: (name) => `Toggle prompt "${name}"`,
+        noPromptsInPreset: 'No prompts in this preset.',
+        noSearchResults: 'No search results.',
+        unlinked: 'Unlinked',
+        unlinkedTitle: 'Prompt not linked to prompt_order (character_id: 100001)',
+        copyContent: 'Copy content',
+        addToManager: 'Add to prompt manager',
+        markerNoContent: '(Marker - no content)',
+        noContent: '(No content)',
+        customPresetManager: 'Custom Preset Manager',
+        showPresetCustomizeBtn: 'Show Preset Customize Button',
+        showPresetCustomizeBtnNote: 'Shows/hides the "Customize Preset" button at the top of the prompt manager.',
+        showQuickToggle: 'Show Quick Prompt Toggle',
+        showQuickToggleNote: 'Shows/hides the quick toggle in prompt editor and toggle buttons above input.',
+        enableCollapseToggle: 'Enable Collapse Toggle',
+        enableCollapseToggleNote: 'Shows the collapse/expand button for the quick toggle bar above the input.',
+        enablePositionSelect: 'Enable Position Select',
+        enablePositionSelectNote: 'Select position when adding prompts, and change position in the editor.',
+        closePresetCustom: 'Close Preset Customizer',
+        openPresetCustom: 'Customize Preset',
+        noPresets: 'No presets available',
+        selectPreset: 'Select preset:',
+        searchPlaceholder: 'Search prompts (name/role/content)',
+        search: 'Search',
+        reset: 'Reset',
+    };
+    const locale = (getCurrentLocale() || '').toLowerCase();
+    return locale.startsWith('ko') ? ko : en;
+})();
 const QUICK_TOGGLE_NAME_KEY = 'quick_prompt_toggle_name';
 const QUICK_TOGGLE_ENABLED_KEY = 'quick_prompt_toggle_enabled';
 const FEATURE_DEFAULTS = {
@@ -138,7 +232,7 @@ function ensureQuickTogglePopupControls() {
     quickBlock.className = 'completion_prompt_manager_popup_entry_form_control flex1';
 
     const title = document.createElement('label');
-    title.textContent = '빠른 프롬프트 토글';
+    title.textContent = L.quickPromptToggle;
     title.style.display = 'block';
     title.style.marginBottom = '5px';
 
@@ -149,18 +243,18 @@ function ensureQuickTogglePopupControls() {
     nameInput.id = 'custom_preset_quick_toggle_name';
     nameInput.className = 'text_pole';
     nameInput.type = 'text';
-    nameInput.placeholder = '토글 버튼 이름';
+    nameInput.placeholder = L.toggleButtonName;
 
     const enableLabel = document.createElement('label');
     enableLabel.className = 'checkbox_label custom_preset_quick_toggle_checkbox';
-    enableLabel.title = '체크 시 빠른 토글 버튼 표시';
+    enableLabel.title = L.checkToShowToggle;
 
     const enableCheckbox = document.createElement('input');
     enableCheckbox.id = 'custom_preset_quick_toggle_enabled';
     enableCheckbox.type = 'checkbox';
 
     const enableText = document.createElement('span');
-    enableText.textContent = '사용';
+    enableText.textContent = L.use;
 
     enableLabel.appendChild(enableCheckbox);
     enableLabel.appendChild(enableText);
@@ -175,22 +269,22 @@ function ensureQuickTogglePopupControls() {
     positionBlock.className = 'completion_prompt_manager_popup_entry_form_control flex1';
 
     const positionTitle = document.createElement('label');
-    positionTitle.textContent = '프롬프트 위치';
+    positionTitle.textContent = L.promptPosition;
     positionTitle.style.display = 'block';
     positionTitle.style.marginBottom = '5px';
 
     const positionSelect = document.createElement('select');
     positionSelect.id = 'custom_preset_position_select';
     positionSelect.className = 'text_pole';
-    positionSelect.addEventListener('change', () => {
-        const saveBtn = document.getElementById('completion_prompt_manager_popup_entry_form_save');
-        const promptId = saveBtn?.dataset.pmPrompt;
-        if (!promptId || !positionSelect.value) return;
-        movePromptToPosition(promptId, positionSelect.value);
-        loadPositionSelectForPrompt(promptId);
-    });
+
+    const positionHint = document.createElement('small');
+    positionHint.className = 'notes';
+    positionHint.textContent = L.promptPositionHint;
+    positionHint.style.opacity = '0.6';
+    positionHint.style.marginBottom = '3px';
 
     positionBlock.appendChild(positionTitle);
+    positionBlock.appendChild(positionHint);
     positionBlock.appendChild(positionSelect);
 
     quickRow.appendChild(positionBlock);
@@ -242,7 +336,7 @@ function loadPositionSelectForPrompt(promptId) {
 
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = '-- 위치 선택 --';
+    defaultOption.textContent = L.selectPosition;
     select.appendChild(defaultOption);
 
     if (!promptId) {
@@ -307,7 +401,14 @@ function observePromptPopupChanges() {
         const promptId = saveBtn.dataset.pmPrompt;
         if (!promptId) return;
         const quickData = readQuickToggleForm();
-        setTimeout(() => applyQuickToggleDataToPrompt(promptId, quickData), 0);
+        const positionSelect = document.getElementById('custom_preset_position_select');
+        const selectedPosition = positionSelect?.value || '';
+        setTimeout(() => {
+            applyQuickToggleDataToPrompt(promptId, quickData);
+            if (selectedPosition) {
+                movePromptToPosition(promptId, selectedPosition);
+            }
+        }, 0);
     }, true);
 
     if (quickPopupObserver) return;
@@ -331,7 +432,7 @@ async function copyToClipboard(text) {
     try {
         if (navigator.clipboard && window.isSecureContext) {
             await navigator.clipboard.writeText(text);
-            toastr.success('클립보드에 복사되었습니다.');
+            toastr.success(L.copiedToClipboard);
             return;
         }
     } catch (err) {
@@ -360,13 +461,13 @@ async function copyToClipboard(text) {
         document.body.removeChild(textArea);
 
         if (success) {
-            toastr.success('클립보드에 복사되었습니다.');
+            toastr.success(L.copiedToClipboard);
         } else {
-            toastr.error('복사에 실패했습니다.');
+            toastr.error(L.copyFailed);
         }
     } catch (err) {
         console.error('Failed to copy:', err);
-        toastr.error('복사에 실패했습니다.');
+        toastr.error(L.copyFailed);
     }
 }
 
@@ -376,7 +477,7 @@ async function copyToClipboard(text) {
  */
 function addPromptToManager(prompt) {
     if (!promptManager) {
-        toastr.error('프롬프트 매니저가 초기화되지 않았습니다.');
+        toastr.error(L.promptManagerNotInit);
         return;
     }
 
@@ -405,7 +506,7 @@ function addPromptToManagerAtEnd(prompt) {
     promptManager.saveServiceSettings();
     promptManager.render();
 
-    toastr.success(`프롬프트 "${prompt.name}"이(가) 추가되었습니다.`);
+    toastr.success(L.promptAdded(prompt.name));
 }
 
 function addPromptToManagerAtPosition(prompt, afterIdentifier) {
@@ -438,7 +539,7 @@ function addPromptToManagerAtPosition(prompt, afterIdentifier) {
     promptManager.saveServiceSettings();
     promptManager.render();
 
-    toastr.success(`프롬프트 "${prompt.name}"이(가) 추가되었습니다.`);
+    toastr.success(L.promptAdded(prompt.name));
 }
 
 function showPositionSelectModal(prompt) {
@@ -462,11 +563,11 @@ function showPositionSelectModal(prompt) {
     modal.className = 'custom_preset_position_modal';
 
     const title = document.createElement('h3');
-    title.textContent = '프롬프트 삽입 위치 선택';
+    title.textContent = L.selectInsertPosition;
     title.style.marginBottom = '10px';
 
     const desc = document.createElement('p');
-    desc.textContent = '선택한 프롬프트 아래에 삽입됩니다.';
+    desc.textContent = L.insertBelowSelected;
     desc.style.marginBottom = '10px';
     desc.style.opacity = '0.7';
     desc.style.fontSize = '0.9em';
@@ -491,7 +592,7 @@ function showPositionSelectModal(prompt) {
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'menu_button';
-    cancelBtn.textContent = '취소';
+    cancelBtn.textContent = L.cancel;
     cancelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         removeModal();
@@ -500,7 +601,7 @@ function showPositionSelectModal(prompt) {
     const confirmBtn = document.createElement('button');
     confirmBtn.type = 'button';
     confirmBtn.className = 'menu_button';
-    confirmBtn.textContent = '확인';
+    confirmBtn.textContent = L.confirm;
     confirmBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (select.value) {
@@ -640,7 +741,7 @@ function createQuickToggleCollapseButtonElement() {
     button.className = 'far fa-caret-square-up interactable';
     button.tabIndex = 0;
     button.style.display = 'none';
-    button.title = '빠른 프롬프트 토글 펼치기';
+    button.title = L.expandToggle;
     return button;
 }
 
@@ -679,10 +780,10 @@ function updateQuickToggleCollapseButtonState(hasQuickPrompts) {
 
     if (isQuickToggleBarCollapsed()) {
         toggleButton.className = 'far fa-caret-square-up interactable';
-        toggleButton.title = '빠른 프롬프트 토글 펼치기';
+        toggleButton.title = L.expandToggle;
     } else {
         toggleButton.className = 'fas fa-caret-square-down interactable';
-        toggleButton.title = '빠른 프롬프트 토글 접기';
+        toggleButton.title = L.collapseToggle;
     }
 }
 
@@ -721,7 +822,7 @@ function renderQuickToggleButtons() {
         button.className = 'menu_button custom_preset_quick_toggle_button';
         if (!isEnabled) button.classList.add('is_disabled');
         button.textContent = String(prompt[QUICK_TOGGLE_NAME_KEY]).trim();
-        button.title = `프롬프트 "${prompt.name}" 토글`;
+        button.title = L.togglePrompt(prompt.name);
         button.addEventListener('click', () => {
             togglePromptEnabledByIdentifier(getActivePromptManagerPreset(), prompt.identifier);
             renderQuickToggleButtons();
@@ -768,7 +869,7 @@ function renderPromptList(preset) {
     listContainer.innerHTML = '';
 
     if (!preset || !preset.prompts || preset.prompts.length === 0) {
-        listContainer.innerHTML = '<div class="custom_preset_empty_message">이 프리셋에는 프롬프트가 없습니다.</div>';
+        listContainer.innerHTML = `<div class="custom_preset_empty_message">${L.noPromptsInPreset}</div>`;
         return;
     }
 
@@ -778,14 +879,14 @@ function renderPromptList(preset) {
     const filteredPrompts = orderedPrompts.filter(({ prompt }) => matchesSearch(prompt, keyword));
 
     if (orderedPrompts.length === 0) {
-        listContainer.innerHTML = '<div class="custom_preset_empty_message">이 프리셋에는 프롬프트가 없습니다.</div>';
+        listContainer.innerHTML = `<div class="custom_preset_empty_message">${L.noPromptsInPreset}</div>`;
         return;
     }
 
     if (filteredPrompts.length === 0) {
         listContainer.innerHTML = keyword
-            ? '<div class="custom_preset_empty_message">검색 결과가 없습니다.</div>'
-            : '<div class="custom_preset_empty_message">이 프리셋에는 프롬프트가 없습니다.</div>';
+            ? `<div class="custom_preset_empty_message">${L.noSearchResults}</div>`
+            : `<div class="custom_preset_empty_message">${L.noPromptsInPreset}</div>`;
         return;
     }
 
@@ -815,8 +916,8 @@ function renderPromptList(preset) {
         if (!isLinked) {
             unlinkedBadge = document.createElement('span');
             unlinkedBadge.className = 'custom_preset_prompt_status';
-            unlinkedBadge.textContent = '미연결';
-            unlinkedBadge.title = 'prompt_order(character_id: 100001)에 연결되지 않은 프롬프트';
+            unlinkedBadge.textContent = L.unlinked;
+            unlinkedBadge.title = L.unlinkedTitle;
         }
 
         const actions = document.createElement('div');
@@ -826,7 +927,7 @@ function renderPromptList(preset) {
         const copyBtn = document.createElement('button');
         copyBtn.className = 'menu_button';
         copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
-        copyBtn.title = '내용 복사';
+        copyBtn.title = L.copyContent;
         copyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             copyToClipboard(prompt.content || '');
@@ -837,7 +938,7 @@ function renderPromptList(preset) {
             const addBtn = document.createElement('button');
             addBtn.className = 'menu_button';
             addBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
-            addBtn.title = '프롬프트 매니저에 추가';
+            addBtn.title = L.addToManager;
             addBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 addPromptToManager(prompt);
@@ -855,7 +956,7 @@ function renderPromptList(preset) {
         // Content area (toggle)
         const content = document.createElement('div');
         content.className = 'custom_preset_prompt_content';
-        content.textContent = prompt.content || (isMarker ? '(마커 - 내용 없음)' : '(내용 없음)');
+        content.textContent = prompt.content || (isMarker ? L.markerNoContent : L.noContent);
 
         // Toggle content on header click
         header.addEventListener('click', () => {
@@ -899,7 +1000,7 @@ function createExtensionSettingsMenu() {
     drawerHeader.className = 'inline-drawer-toggle inline-drawer-header';
 
     const headerTitle = document.createElement('b');
-    headerTitle.textContent = '커스텀 프리셋 매니저';
+    headerTitle.textContent = L.customPresetManager;
 
     const headerIcon = document.createElement('div');
     headerIcon.className = 'inline-drawer-icon fa-solid fa-circle-chevron-down down interactable';
@@ -921,13 +1022,13 @@ function createExtensionSettingsMenu() {
     toggleCustomizer.className = 'extension_enabled';
     toggleCustomizer.checked = settings.showPresetCustomizerButton !== false;
     const text1 = document.createElement('span');
-    text1.innerHTML = '<strong>프리셋 커스텀하기 버튼 표시</strong>';
+    text1.innerHTML = `<strong>${L.showPresetCustomizeBtn}</strong>`;
     row1.appendChild(toggleCustomizer);
     row1.appendChild(text1);
 
     const note1 = document.createElement('small');
     note1.className = 'notes';
-    note1.textContent = '프롬프트 매니저 상단의 "프리셋 커스텀하기" 버튼을 표시/숨김합니다.';
+    note1.textContent = L.showPresetCustomizeBtnNote;
 
     const separator = document.createElement('hr');
     separator.className = 'm-t-1 m-b-1';
@@ -941,13 +1042,13 @@ function createExtensionSettingsMenu() {
     toggleQuickFeature.className = 'extension_enabled';
     toggleQuickFeature.checked = settings.showQuickPromptToggleFeature !== false;
     const text2 = document.createElement('span');
-    text2.innerHTML = '<strong>빠른 프롬프트 토글 표시</strong>';
+    text2.innerHTML = `<strong>${L.showQuickToggle}</strong>`;
     row2.appendChild(toggleQuickFeature);
     row2.appendChild(text2);
 
     const note2 = document.createElement('small');
     note2.className = 'notes';
-    note2.textContent = '프롬프트 편집의 빠른 토글 항목과 인풋 위 토글 버튼을 표시/숨김합니다.';
+    note2.textContent = L.showQuickToggleNote;
 
     const row3 = document.createElement('label');
     row3.className = 'checkbox_label';
@@ -958,13 +1059,13 @@ function createExtensionSettingsMenu() {
     toggleQuickCollapseFeature.className = 'extension_enabled';
     toggleQuickCollapseFeature.checked = settings.showQuickPromptToggleCollapseFeature !== false;
     const text3 = document.createElement('span');
-    text3.innerHTML = '<strong>빠른 토글 접기기능 활성화</strong>';
+    text3.innerHTML = `<strong>${L.enableCollapseToggle}</strong>`;
     row3.appendChild(toggleQuickCollapseFeature);
     row3.appendChild(text3);
 
     const note3 = document.createElement('small');
     note3.className = 'notes';
-    note3.textContent = '입력창 상단의 빠른 토글 바 접기/펼치기 버튼을 표시합니다.';
+    note3.textContent = L.enableCollapseToggleNote;
 
     toggleCustomizer.addEventListener('change', () => {
         settings.showPresetCustomizerButton = !!toggleCustomizer.checked;
@@ -996,13 +1097,13 @@ function createExtensionSettingsMenu() {
     togglePosition.className = 'extension_enabled';
     togglePosition.checked = settings.showPromptPositionFeature !== false;
     const text4 = document.createElement('span');
-    text4.innerHTML = '<strong>프롬프트 위치 정하기</strong>';
+    text4.innerHTML = `<strong>${L.enablePositionSelect}</strong>`;
     row4.appendChild(togglePosition);
     row4.appendChild(text4);
 
     const note4 = document.createElement('small');
     note4.className = 'notes';
-    note4.textContent = '프롬프트 추가 시 위치를 선택하고, 편집에서 위치를 변경할 수 있습니다.';
+    note4.textContent = L.enablePositionSelectNote;
 
     togglePosition.addEventListener('change', () => {
         settings.showPromptPositionFeature = !!togglePosition.checked;
@@ -1071,7 +1172,7 @@ function togglePanel() {
     }
 
     if (btn) {
-        btn.textContent = isPanelOpen ? '프리셋 커스텀 닫기' : '프리셋 커스텀하기';
+        btn.textContent = isPanelOpen ? L.closePresetCustom : L.openPresetCustom;
     }
 
     // Refresh preset list when opening
@@ -1093,7 +1194,7 @@ function populatePresetSelect() {
     if (presetNames.length === 0) {
         const option = document.createElement('option');
         option.value = '';
-        option.textContent = '프리셋이 없습니다';
+        option.textContent = L.noPresets;
         select.appendChild(option);
         return;
     }
@@ -1132,7 +1233,7 @@ function createUI() {
     const toggleBtn = document.createElement('button');
     toggleBtn.id = 'custom_preset_toggle_btn';
     toggleBtn.className = 'menu_button';
-    toggleBtn.textContent = '프리셋 커스텀하기';
+    toggleBtn.textContent = L.openPresetCustom;
     toggleBtn.addEventListener('click', togglePanel);
 
     // Create panel
@@ -1141,7 +1242,7 @@ function createUI() {
 
     // Create preset select
     const selectLabel = document.createElement('label');
-    selectLabel.textContent = '프리셋 선택:';
+    selectLabel.textContent = L.selectPreset;
     selectLabel.style.display = 'block';
     selectLabel.style.marginBottom = '5px';
 
@@ -1158,7 +1259,7 @@ function createUI() {
     searchInput.id = 'custom_preset_search_input';
     searchInput.className = 'text_pole';
     searchInput.type = 'text';
-    searchInput.placeholder = '프롬프트 검색 (이름/role/내용)';
+    searchInput.placeholder = L.searchPlaceholder;
     searchInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -1169,13 +1270,13 @@ function createUI() {
     const searchBtn = document.createElement('button');
     searchBtn.id = 'custom_preset_search_btn';
     searchBtn.className = 'menu_button';
-    searchBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> 검색';
+    searchBtn.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i> ${L.search}`;
     searchBtn.addEventListener('click', triggerSearch);
 
     const clearBtn = document.createElement('button');
     clearBtn.id = 'custom_preset_clear_btn';
     clearBtn.className = 'menu_button';
-    clearBtn.textContent = '초기화';
+    clearBtn.textContent = L.reset;
     clearBtn.addEventListener('click', clearSearch);
 
     searchRow.appendChild(searchInput);
