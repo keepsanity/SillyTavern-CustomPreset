@@ -21,10 +21,6 @@ A SillyTavern extension for managing and customizing prompt presets.
 - Change prompt position in the prompt editor (applied on save)
 - All features can be individually enabled/disabled in settings
 
-### Localization
-- Supports Korean and English
-- Automatically follows SillyTavern's language setting
-
 ## Settings
 
 All features can be toggled in **Extensions > Custom Preset Manager**:
@@ -60,10 +56,6 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 - "+" 버튼으로 프롬프트 추가 시 삽입 위치 선택 가능
 - 프롬프트 편집에서 위치 변경 (저장 시 적용)
 - 모든 기능을 설정에서 개별적으로 켜고 끌 수 있음
-
-### 다국어 지원
-- 한국어, 영어 지원
-- SillyTavern 언어 설정에 자동으로 따라감
 
 ## 설정
 
