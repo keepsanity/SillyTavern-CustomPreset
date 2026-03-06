@@ -11,6 +11,7 @@ const FEATURE_DEFAULTS = {
     showQuickPromptToggleFeature: true,
     showQuickPromptToggleCollapseFeature: true,
     quickPromptToggleBarCollapsed: false,
+    showPromptPositionFeature: true,
 };
 
 let isPanelOpen = false;
@@ -64,6 +65,10 @@ function isQuickToggleFeatureEnabled() {
 
 function isQuickToggleCollapseFeatureEnabled() {
     return getFeatureSettings().showQuickPromptToggleCollapseFeature !== false;
+}
+
+function isPromptPositionFeatureEnabled() {
+    return getFeatureSettings().showPromptPositionFeature !== false;
 }
 
 function isQuickToggleBarCollapsed() {
@@ -163,6 +168,32 @@ function ensureQuickTogglePopupControls() {
     row.appendChild(enableLabel);
     quickBlock.appendChild(title);
     quickBlock.appendChild(row);
+
+    // Position select block
+    const positionBlock = document.createElement('div');
+    positionBlock.id = 'custom_preset_position_block';
+    positionBlock.className = 'completion_prompt_manager_popup_entry_form_control flex1';
+
+    const positionTitle = document.createElement('label');
+    positionTitle.textContent = '프롬프트 위치';
+    positionTitle.style.display = 'block';
+    positionTitle.style.marginBottom = '5px';
+
+    const positionSelect = document.createElement('select');
+    positionSelect.id = 'custom_preset_position_select';
+    positionSelect.className = 'text_pole';
+    positionSelect.addEventListener('change', () => {
+        const saveBtn = document.getElementById('completion_prompt_manager_popup_entry_form_save');
+        const promptId = saveBtn?.dataset.pmPrompt;
+        if (!promptId || !positionSelect.value) return;
+        movePromptToPosition(promptId, positionSelect.value);
+        loadPositionSelectForPrompt(promptId);
+    });
+
+    positionBlock.appendChild(positionTitle);
+    positionBlock.appendChild(positionSelect);
+
+    quickRow.appendChild(positionBlock);
     quickRow.appendChild(quickBlock);
     baseRow.insertAdjacentElement('afterend', quickRow);
 }
@@ -178,6 +209,8 @@ function readQuickToggleForm() {
 
 function loadQuickToggleFormForPrompt(promptId) {
     ensureQuickTogglePopupControls();
+    loadPositionSelectForPrompt(promptId);
+
     const nameInput = document.getElementById('custom_preset_quick_toggle_name');
     const enabledInput = document.getElementById('custom_preset_quick_toggle_enabled');
     const quickBlock = document.getElementById('custom_preset_quick_toggle_block');
@@ -194,6 +227,66 @@ function loadQuickToggleFormForPrompt(promptId) {
 
     nameInput.value = (prompt[QUICK_TOGGLE_NAME_KEY] || '').trim();
     enabledInput.checked = !!prompt[QUICK_TOGGLE_ENABLED_KEY];
+}
+
+function loadPositionSelectForPrompt(promptId) {
+    const select = document.getElementById('custom_preset_position_select');
+    const positionBlock = document.getElementById('custom_preset_position_block');
+    if (!select) return;
+
+    if (positionBlock) {
+        positionBlock.style.display = isPromptPositionFeatureEnabled() ? '' : 'none';
+    }
+
+    select.innerHTML = '';
+
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '-- 위치 선택 --';
+    select.appendChild(defaultOption);
+
+    if (!promptId) {
+        select.disabled = true;
+        return;
+    }
+
+    const preset = getActivePromptManagerPreset();
+    if (!preset) {
+        select.disabled = true;
+        return;
+    }
+
+    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === 100001);
+    if (!promptOrderEntry?.order) {
+        select.disabled = true;
+        return;
+    }
+
+    const isCurrentLinked = promptOrderEntry.order.some(item => item.identifier === promptId);
+    if (!isCurrentLinked) {
+        select.disabled = true;
+        return;
+    }
+
+    select.disabled = false;
+
+    const linkedPrompts = getOrderedPrompts(preset).filter(({ isLinked }) => isLinked);
+    let currentAboveIdentifier = '';
+    const idx = promptOrderEntry.order.findIndex(item => item.identifier === promptId);
+    if (idx > 0) {
+        currentAboveIdentifier = promptOrderEntry.order[idx - 1].identifier;
+    }
+
+    linkedPrompts.forEach(({ prompt }) => {
+        if (prompt.identifier === promptId) return;
+        const option = document.createElement('option');
+        option.value = prompt.identifier;
+        option.textContent = prompt.name;
+        if (prompt.identifier === currentAboveIdentifier) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
 }
 
 function applyQuickToggleDataToPrompt(promptId, quickData) {
@@ -287,30 +380,166 @@ function addPromptToManager(prompt) {
         return;
     }
 
-    // Generate a new unique identifier
-    const newIdentifier = uuidv4();
+    if (isPromptPositionFeatureEnabled()) {
+        showPositionSelectModal(prompt);
+    } else {
+        addPromptToManagerAtEnd(prompt);
+    }
+}
 
-    // Create a copy of the prompt with a new identifier
+function addPromptToManagerAtEnd(prompt) {
+    const newIdentifier = uuidv4();
     const newPrompt = {
         ...prompt,
         identifier: newIdentifier,
-        system_prompt: false, // User-added prompts are not system prompts
+        system_prompt: false,
     };
 
-    // Add the prompt to the prompts array
     promptManager.addPrompt(newPrompt, newIdentifier);
 
-    // Append to current character's prompt order
     const addedPrompt = promptManager.getPromptById(newIdentifier);
     if (addedPrompt && promptManager.activeCharacter) {
         promptManager.appendPrompt(addedPrompt, promptManager.activeCharacter);
     }
 
-    // Save and re-render
     promptManager.saveServiceSettings();
     promptManager.render();
 
     toastr.success(`프롬프트 "${prompt.name}"이(가) 추가되었습니다.`);
+}
+
+function addPromptToManagerAtPosition(prompt, afterIdentifier) {
+    const newIdentifier = uuidv4();
+    const newPrompt = {
+        ...prompt,
+        identifier: newIdentifier,
+        system_prompt: false,
+    };
+
+    promptManager.addPrompt(newPrompt, newIdentifier);
+
+    const preset = getActivePromptManagerPreset();
+    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === 100001);
+
+    if (promptOrderEntry?.order && afterIdentifier) {
+        const afterIndex = promptOrderEntry.order.findIndex(item => item.identifier === afterIdentifier);
+        if (afterIndex !== -1) {
+            promptOrderEntry.order.splice(afterIndex + 1, 0, { identifier: newIdentifier, enabled: true });
+        } else {
+            promptOrderEntry.order.push({ identifier: newIdentifier, enabled: true });
+        }
+    } else {
+        const addedPrompt = promptManager.getPromptById(newIdentifier);
+        if (addedPrompt && promptManager.activeCharacter) {
+            promptManager.appendPrompt(addedPrompt, promptManager.activeCharacter);
+        }
+    }
+
+    promptManager.saveServiceSettings();
+    promptManager.render();
+
+    toastr.success(`프롬프트 "${prompt.name}"이(가) 추가되었습니다.`);
+}
+
+function showPositionSelectModal(prompt) {
+    const preset = getActivePromptManagerPreset();
+    const linkedPrompts = getOrderedPrompts(preset).filter(({ isLinked }) => isLinked);
+
+    if (linkedPrompts.length === 0) {
+        addPromptToManagerAtEnd(prompt);
+        return;
+    }
+
+    const removeModal = () => {
+        overlay.remove();
+        modal.remove();
+    };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'custom_preset_position_modal_overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'custom_preset_position_modal';
+
+    const title = document.createElement('h3');
+    title.textContent = '프롬프트 삽입 위치 선택';
+    title.style.marginBottom = '10px';
+
+    const desc = document.createElement('p');
+    desc.textContent = '선택한 프롬프트 아래에 삽입됩니다.';
+    desc.style.marginBottom = '10px';
+    desc.style.opacity = '0.7';
+    desc.style.fontSize = '0.9em';
+
+    const select = document.createElement('select');
+    select.className = 'text_pole';
+    select.style.width = '100%';
+    select.style.marginBottom = '10px';
+
+    linkedPrompts.forEach(({ prompt: p }) => {
+        const option = document.createElement('option');
+        option.value = p.identifier;
+        option.textContent = p.name;
+        select.appendChild(option);
+    });
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '8px';
+    btnRow.style.justifyContent = 'flex-end';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'menu_button';
+    cancelBtn.textContent = '취소';
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeModal();
+    });
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'menu_button';
+    confirmBtn.textContent = '확인';
+    confirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (select.value) {
+            addPromptToManagerAtPosition(prompt, select.value);
+        } else {
+            addPromptToManagerAtEnd(prompt);
+        }
+        removeModal();
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(confirmBtn);
+
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(select);
+    modal.appendChild(btnRow);
+
+    // Prevent events from bubbling up to ST's outside-click handlers
+    // Modal uses bubbling phase so child buttons still receive events
+    const stopAll = (e) => e.stopPropagation();
+    for (const evt of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
+        modal.addEventListener(evt, stopAll);
+        overlay.addEventListener(evt, stopAll);
+    }
+    overlay.addEventListener('click', () => removeModal());
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+
+    // Position with JS to avoid CSS containment issues from ancestor transforms
+    requestAnimationFrame(() => {
+        const modalHeight = modal.offsetHeight;
+        const modalWidth = modal.offsetWidth;
+        const viewH = window.innerHeight;
+        const viewW = window.innerWidth;
+        modal.style.top = Math.max(10, (viewH - modalHeight) / 2) + 'px';
+        modal.style.left = Math.max(10, (viewW - modalWidth) / 2) + 'px';
+    });
 }
 
 /**
@@ -378,6 +607,29 @@ function togglePromptEnabledByIdentifier(preset, identifier) {
     const target = promptOrderEntry.order.find(item => item.identifier === identifier);
     if (!target) return;
     target.enabled = !target.enabled;
+    promptManager?.saveServiceSettings?.();
+    promptManager?.render?.();
+}
+
+function movePromptToPosition(promptId, afterIdentifier) {
+    const preset = getActivePromptManagerPreset();
+    if (!preset) return;
+
+    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === 100001);
+    if (!promptOrderEntry?.order) return;
+
+    const currentIndex = promptOrderEntry.order.findIndex(item => item.identifier === promptId);
+    if (currentIndex === -1) return;
+
+    const [removed] = promptOrderEntry.order.splice(currentIndex, 1);
+
+    const afterIndex = promptOrderEntry.order.findIndex(item => item.identifier === afterIdentifier);
+    if (afterIndex !== -1) {
+        promptOrderEntry.order.splice(afterIndex + 1, 0, removed);
+    } else {
+        promptOrderEntry.order.push(removed);
+    }
+
     promptManager?.saveServiceSettings?.();
     promptManager?.render?.();
 }
@@ -735,6 +987,29 @@ function createExtensionSettingsMenu() {
         applyFeatureVisibility();
     });
 
+    const row4 = document.createElement('label');
+    row4.className = 'checkbox_label';
+    row4.setAttribute('for', 'custom_preset_show_position_feature');
+    const togglePosition = document.createElement('input');
+    togglePosition.id = 'custom_preset_show_position_feature';
+    togglePosition.type = 'checkbox';
+    togglePosition.className = 'extension_enabled';
+    togglePosition.checked = settings.showPromptPositionFeature !== false;
+    const text4 = document.createElement('span');
+    text4.innerHTML = '<strong>프롬프트 위치 정하기</strong>';
+    row4.appendChild(togglePosition);
+    row4.appendChild(text4);
+
+    const note4 = document.createElement('small');
+    note4.className = 'notes';
+    note4.textContent = '프롬프트 추가 시 위치를 선택하고, 편집에서 위치를 변경할 수 있습니다.';
+
+    togglePosition.addEventListener('change', () => {
+        settings.showPromptPositionFeature = !!togglePosition.checked;
+        saveFeatureSettings();
+        applyFeatureVisibility();
+    });
+
     drawerContent.appendChild(row1);
     drawerContent.appendChild(note1);
     // drawerContent.appendChild(separator);
@@ -742,6 +1017,8 @@ function createExtensionSettingsMenu() {
     drawerContent.appendChild(note2);
     drawerContent.appendChild(row3);
     drawerContent.appendChild(note3);
+    drawerContent.appendChild(row4);
+    drawerContent.appendChild(note4);
     drawer.appendChild(drawerHeader);
     drawer.appendChild(drawerContent);
     container.appendChild(drawer);
@@ -765,6 +1042,11 @@ function applyFeatureVisibility() {
     const quickBlock = document.getElementById('custom_preset_quick_toggle_block');
     if (quickBlock) {
         quickBlock.style.display = settings.showQuickPromptToggleFeature !== false ? '' : 'none';
+    }
+
+    const positionBlock = document.getElementById('custom_preset_position_block');
+    if (positionBlock) {
+        positionBlock.style.display = settings.showPromptPositionFeature !== false ? '' : 'none';
     }
 
     if (settings.showQuickPromptToggleCollapseFeature === false && settings.quickPromptToggleBarCollapsed) {

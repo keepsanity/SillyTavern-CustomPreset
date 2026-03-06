@@ -213,3 +213,43 @@
     filter: grayscale(0.7);
 }
 
+/* Position Select Modal */
+.custom_preset_position_modal_overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+}
+
+.custom_preset_position_modal {
+    position: fixed;
+    background-color: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 300px;
+    max-width: 500px;
+    width: 90%;
+    box-sizing: border-box;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
+}
+
+.custom_preset_position_modal h3 {
+    margin: 0;
+}
+
+.custom_preset_position_modal .menu_button {
+    flex-direction: row;
+    white-space: nowrap;
+    width: auto;
+}
+
+/* Position Select in Prompt Editor */
+#custom_preset_position_select {
+    width: 100%;
+}
+
