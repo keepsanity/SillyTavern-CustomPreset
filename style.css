@@ -253,3 +253,26 @@
     width: 100%;
 }
 
+/* Toggle Preset Section */
+#custom_preset_toggle_preset_section {
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
+.custom_preset_toggle_preset_row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+#custom_preset_toggle_preset_select {
+    flex: 1;
+    min-width: 0;
+}
+
+.custom_preset_toggle_preset_row .menu_button {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    min-width: 30px;
+}
+

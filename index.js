@@ -50,6 +50,23 @@ const L = (() => {
         searchPlaceholder: '프롬프트 검색 (이름/role/내용)',
         search: '검색',
         reset: '초기화',
+        togglePresetLabel: '토글 프리셋:',
+        togglePresetDefault: '기본',
+        togglePresetNew: '새 토글 프리셋 이름을 입력하세요:',
+        togglePresetRename: '새 이름을 입력하세요:',
+        togglePresetDeleteConfirm: (name) => `토글 프리셋 "${name}"을(를) 삭제하시겠습니까?`,
+        togglePresetCannotDeleteDefault: '기본 토글 프리셋은 삭제/이름변경할 수 없습니다.',
+        togglePresetSaved: (name) => `토글 프리셋 "${name}" 저장됨.`,
+        togglePresetApplied: (name) => `토글 프리셋 "${name}" 적용됨.`,
+        togglePresetCreated: (name) => `토글 프리셋 "${name}" 생성됨.`,
+        togglePresetRenamed: (o, n) => `"${o}" → "${n}" 이름 변경됨.`,
+        togglePresetDeleted: (name) => `토글 프리셋 "${name}" 삭제됨.`,
+        togglePresetNameExists: '같은 이름의 토글 프리셋이 이미 존재합니다.',
+        togglePresetSave: '현재 상태 저장',
+        togglePresetRenameTitle: '토글 프리셋 이름 변경',
+        togglePresetNewTitle: '토글 프리셋 추가',
+        enableTogglePreset: '토글 프리셋 표시',
+        enableTogglePresetNote: '프롬프트 on/off 조합을 저장/전환하는 토글 프리셋 기능을 표시합니다.',
     };
     const en = {
         quickPromptToggle: 'Quick Prompt Toggle',
@@ -94,6 +111,23 @@ const L = (() => {
         searchPlaceholder: 'Search prompts (name/role/content)',
         search: 'Search',
         reset: 'Reset',
+        togglePresetLabel: 'Toggle Preset:',
+        togglePresetDefault: 'Default',
+        togglePresetNew: 'Enter a name for the new toggle preset:',
+        togglePresetRename: 'Enter a new name:',
+        togglePresetDeleteConfirm: (name) => `Delete toggle preset "${name}"?`,
+        togglePresetCannotDeleteDefault: 'Cannot delete/rename the default toggle preset.',
+        togglePresetSaved: (name) => `Toggle preset "${name}" saved.`,
+        togglePresetApplied: (name) => `Toggle preset "${name}" applied.`,
+        togglePresetCreated: (name) => `Toggle preset "${name}" created.`,
+        togglePresetRenamed: (o, n) => `"${o}" renamed to "${n}".`,
+        togglePresetDeleted: (name) => `Toggle preset "${name}" deleted.`,
+        togglePresetNameExists: 'A toggle preset with this name already exists.',
+        togglePresetSave: 'Save current state',
+        togglePresetRenameTitle: 'Rename toggle preset',
+        togglePresetNewTitle: 'Add toggle preset',
+        enableTogglePreset: 'Show Toggle Preset',
+        enableTogglePresetNote: 'Shows the toggle preset feature to save/switch prompt on/off combinations.',
     };
     const locale = (getCurrentLocale() || '').toLowerCase();
     return locale.startsWith('ko') ? ko : en;
@@ -106,6 +140,7 @@ const FEATURE_DEFAULTS = {
     showQuickPromptToggleCollapseFeature: true,
     quickPromptToggleBarCollapsed: false,
     showPromptPositionFeature: true,
+    showTogglePresetFeature: true,
 };
 
 let isPanelOpen = false;
@@ -151,6 +186,254 @@ function getFeatureSettings() {
 function saveFeatureSettings() {
     extension_settings[EXTENSION_NAME] = getFeatureSettings();
     saveSettingsDebounced();
+}
+
+// ========== Toggle Preset Data Helpers ==========
+
+function getTogglePresetsStorage() {
+    const settings = getFeatureSettings();
+    if (!settings.togglePresets || typeof settings.togglePresets !== 'object') {
+        settings.togglePresets = {};
+    }
+    return settings.togglePresets;
+}
+
+function getActiveTogglePresetTracker() {
+    const settings = getFeatureSettings();
+    if (!settings.activeTogglePreset || typeof settings.activeTogglePreset !== 'object') {
+        settings.activeTogglePreset = {};
+    }
+    return settings.activeTogglePreset;
+}
+
+function getTogglePresetsForPreset(presetName) {
+    if (!presetName) return {};
+    const storage = getTogglePresetsStorage();
+    if (!storage[presetName]) {
+        storage[presetName] = {
+            'default': captureCurrentToggleState(),
+        };
+        saveFeatureSettings();
+    }
+    return storage[presetName];
+}
+
+function getActiveTogglePresetName(presetName) {
+    const tracker = getActiveTogglePresetTracker();
+    return tracker[presetName] || 'default';
+}
+
+function setActiveTogglePresetName(presetName, togglePresetName) {
+    const tracker = getActiveTogglePresetTracker();
+    tracker[presetName] = togglePresetName;
+    saveFeatureSettings();
+}
+
+// ========== Toggle Preset Snapshot ==========
+
+function captureCurrentToggleState() {
+    const serviceSettings = promptManager?.serviceSettings;
+    if (!serviceSettings?.prompt_order) return {};
+    const entry = serviceSettings.prompt_order.find(e => e.character_id === 100001);
+    if (!entry?.order) return {};
+    const state = {};
+    for (const item of entry.order) {
+        state[item.identifier] = !!item.enabled;
+    }
+    return state;
+}
+
+function applyTogglePresetSnapshot(snapshot) {
+    const serviceSettings = promptManager?.serviceSettings;
+    if (!serviceSettings?.prompt_order) return;
+    const entry = serviceSettings.prompt_order.find(e => e.character_id === 100001);
+    if (!entry?.order) return;
+    let changed = false;
+    for (const item of entry.order) {
+        if (snapshot.hasOwnProperty(item.identifier)) {
+            const desired = !!snapshot[item.identifier];
+            if (item.enabled !== desired) {
+                item.enabled = desired;
+                changed = true;
+            }
+        }
+    }
+    if (changed) {
+        promptManager.saveServiceSettings();
+        promptManager.render();
+    }
+    renderQuickToggleButtons();
+}
+
+// ========== Toggle Preset CRUD ==========
+
+function createTogglePreset() {
+    const presetName = getActivePresetName();
+    if (!presetName) return;
+    const name = prompt(L.togglePresetNew);
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    const presets = getTogglePresetsForPreset(presetName);
+    if (presets[trimmed]) {
+        toastr.warning(L.togglePresetNameExists);
+        return;
+    }
+    presets[trimmed] = captureCurrentToggleState();
+    setActiveTogglePresetName(presetName, trimmed);
+    saveFeatureSettings();
+    populateTogglePresetSelect(presetName);
+    toastr.success(L.togglePresetCreated(trimmed));
+}
+
+function renameTogglePreset() {
+    const presetName = getActivePresetName();
+    if (!presetName) return;
+    const current = getActiveTogglePresetName(presetName);
+    if (current === 'default') {
+        toastr.warning(L.togglePresetCannotDeleteDefault);
+        return;
+    }
+    const newName = prompt(L.togglePresetRename, current);
+    if (!newName || !newName.trim() || newName.trim() === current) return;
+    const trimmed = newName.trim();
+    const presets = getTogglePresetsForPreset(presetName);
+    if (presets[trimmed]) {
+        toastr.warning(L.togglePresetNameExists);
+        return;
+    }
+    presets[trimmed] = presets[current];
+    delete presets[current];
+    setActiveTogglePresetName(presetName, trimmed);
+    saveFeatureSettings();
+    populateTogglePresetSelect(presetName);
+    toastr.success(L.togglePresetRenamed(current, trimmed));
+}
+
+function deleteTogglePreset() {
+    const presetName = getActivePresetName();
+    if (!presetName) return;
+    const current = getActiveTogglePresetName(presetName);
+    if (current === 'default') {
+        toastr.warning(L.togglePresetCannotDeleteDefault);
+        return;
+    }
+    if (!confirm(L.togglePresetDeleteConfirm(current))) return;
+    const presets = getTogglePresetsForPreset(presetName);
+    delete presets[current];
+    setActiveTogglePresetName(presetName, 'default');
+    saveFeatureSettings();
+    populateTogglePresetSelect(presetName);
+    if (presets['default']) {
+        applyTogglePresetSnapshot(presets['default']);
+    }
+    toastr.success(L.togglePresetDeleted(current));
+}
+
+function saveCurrentStateToTogglePreset() {
+    const presetName = getActivePresetName();
+    if (!presetName) return;
+    const current = getActiveTogglePresetName(presetName);
+    const presets = getTogglePresetsForPreset(presetName);
+    presets[current] = captureCurrentToggleState();
+    saveFeatureSettings();
+    toastr.success(L.togglePresetSaved(current === 'default' ? L.togglePresetDefault : current));
+}
+
+// ========== Toggle Preset UI ==========
+
+function populateTogglePresetSelect(presetName) {
+    const select = document.getElementById('custom_preset_toggle_preset_select');
+    if (!select) return;
+    select.innerHTML = '';
+    if (!presetName) {
+        const option = document.createElement('option');
+        option.value = 'default';
+        option.textContent = L.togglePresetDefault;
+        select.appendChild(option);
+        return;
+    }
+    const presets = getTogglePresetsForPreset(presetName);
+    const active = getActiveTogglePresetName(presetName);
+    const names = Object.keys(presets);
+    const sorted = ['default', ...names.filter(n => n !== 'default').sort()];
+    for (const name of sorted) {
+        if (!presets[name]) continue;
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name === 'default' ? L.togglePresetDefault : name;
+        if (name === active) option.selected = true;
+        select.appendChild(option);
+    }
+}
+
+function onTogglePresetSelectChange() {
+    const select = document.getElementById('custom_preset_toggle_preset_select');
+    if (!select) return;
+    const presetName = getActivePresetName();
+    if (!presetName) return;
+    const toggleName = select.value;
+    setActiveTogglePresetName(presetName, toggleName);
+    const presets = getTogglePresetsForPreset(presetName);
+    const snapshot = presets[toggleName];
+    if (snapshot) {
+        applyTogglePresetSnapshot(snapshot);
+    }
+    // Re-render prompt list using the panel's selected preset
+    const panelSelect = document.getElementById('custom_preset_select');
+    if (panelSelect) {
+        renderPromptList(getPresetByName(panelSelect.value));
+    }
+}
+
+function createTogglePresetUI() {
+    const section = document.createElement('div');
+    section.id = 'custom_preset_toggle_preset_section';
+
+    const label = document.createElement('label');
+    label.textContent = L.togglePresetLabel;
+    label.style.display = 'block';
+    label.style.marginBottom = '5px';
+
+    const row = document.createElement('div');
+    row.className = 'custom_preset_toggle_preset_row';
+
+    const select = document.createElement('select');
+    select.id = 'custom_preset_toggle_preset_select';
+    select.className = 'text_pole';
+    select.addEventListener('change', onTogglePresetSelectChange);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'menu_button';
+    saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
+    saveBtn.title = L.togglePresetSave;
+    saveBtn.addEventListener('click', saveCurrentStateToTogglePreset);
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'menu_button';
+    editBtn.innerHTML = '<i class="fa-solid fa-pencil"></i>';
+    editBtn.title = L.togglePresetRenameTitle;
+    editBtn.addEventListener('click', renameTogglePreset);
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'menu_button';
+    addBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+    addBtn.title = L.togglePresetNewTitle;
+    addBtn.addEventListener('click', createTogglePreset);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'menu_button';
+    deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+    deleteBtn.addEventListener('click', deleteTogglePreset);
+
+    row.appendChild(select);
+    row.appendChild(saveBtn);
+    row.appendChild(editBtn);
+    row.appendChild(addBtn);
+    row.appendChild(deleteBtn);
+
+    section.appendChild(label);
+    section.appendChild(row);
+    return section;
 }
 
 function isQuickToggleFeatureEnabled() {
@@ -982,6 +1265,10 @@ function onPresetSelectChange() {
     renderQuickToggleButtons();
 }
 
+function getActivePresetName() {
+    return oai_settings?.preset_settings_openai || '';
+}
+
 function createExtensionSettingsMenu() {
     if (document.getElementById('custom_preset_settings_container')) return;
 
@@ -1111,6 +1398,29 @@ function createExtensionSettingsMenu() {
         applyFeatureVisibility();
     });
 
+    const row5 = document.createElement('label');
+    row5.className = 'checkbox_label';
+    row5.setAttribute('for', 'custom_preset_show_toggle_preset_feature');
+    const toggleTogglePreset = document.createElement('input');
+    toggleTogglePreset.id = 'custom_preset_show_toggle_preset_feature';
+    toggleTogglePreset.type = 'checkbox';
+    toggleTogglePreset.className = 'extension_enabled';
+    toggleTogglePreset.checked = settings.showTogglePresetFeature !== false;
+    const text5 = document.createElement('span');
+    text5.innerHTML = `<strong>${L.enableTogglePreset}</strong>`;
+    row5.appendChild(toggleTogglePreset);
+    row5.appendChild(text5);
+
+    const note5 = document.createElement('small');
+    note5.className = 'notes';
+    note5.textContent = L.enableTogglePresetNote;
+
+    toggleTogglePreset.addEventListener('change', () => {
+        settings.showTogglePresetFeature = !!toggleTogglePreset.checked;
+        saveFeatureSettings();
+        applyFeatureVisibility();
+    });
+
     drawerContent.appendChild(row1);
     drawerContent.appendChild(note1);
     // drawerContent.appendChild(separator);
@@ -1120,6 +1430,8 @@ function createExtensionSettingsMenu() {
     drawerContent.appendChild(note3);
     drawerContent.appendChild(row4);
     drawerContent.appendChild(note4);
+    drawerContent.appendChild(row5);
+    drawerContent.appendChild(note5);
     drawer.appendChild(drawerHeader);
     drawer.appendChild(drawerContent);
     container.appendChild(drawer);
@@ -1150,6 +1462,11 @@ function applyFeatureVisibility() {
         positionBlock.style.display = settings.showPromptPositionFeature !== false ? '' : 'none';
     }
 
+    const togglePresetSection = document.getElementById('custom_preset_toggle_preset_section');
+    if (togglePresetSection) {
+        togglePresetSection.style.display = settings.showTogglePresetFeature !== false ? '' : 'none';
+    }
+
     if (settings.showQuickPromptToggleCollapseFeature === false && settings.quickPromptToggleBarCollapsed) {
         settings.quickPromptToggleBarCollapsed = false;
         saveFeatureSettings();
@@ -1178,6 +1495,7 @@ function togglePanel() {
     // Refresh preset list when opening
     if (isPanelOpen) {
         populatePresetSelect();
+        populateTogglePresetSelect(getActivePresetName());
     }
 }
 
@@ -1288,6 +1606,9 @@ function createUI() {
     promptList.id = 'custom_preset_prompt_list';
     promptList.className = 'custom_preset_prompt_list';
 
+    // Toggle preset section (outside panel - works with active preset)
+    const togglePresetSection = createTogglePresetUI();
+
     // Assemble panel
     panel.appendChild(selectLabel);
     panel.appendChild(select);
@@ -1297,6 +1618,7 @@ function createUI() {
     // Assemble container
     container.appendChild(toggleBtn);
     container.appendChild(panel);
+    container.appendChild(togglePresetSection);
 
     // Insert before prompt manager
     promptManagerContainer.parentNode.insertBefore(container, promptManagerContainer);
@@ -1339,9 +1661,11 @@ async function init() {
     ensureQuickToggleCollapseButton();
     applyFeatureVisibility();
     renderQuickToggleButtons();
+    populateTogglePresetSelect(getActivePresetName());
 
     eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
         if (isPanelOpen) populatePresetSelect();
+        populateTogglePresetSelect(getActivePresetName());
         renderQuickToggleButtons();
     });
 

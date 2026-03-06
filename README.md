@@ -19,7 +19,12 @@ A SillyTavern extension for managing and customizing prompt presets.
 ### Prompt Position
 - Choose where to insert a prompt when adding it via the "+" button
 - Change prompt position in the prompt editor (applied on save)
-- All features can be individually enabled/disabled in settings
+
+### Toggle Preset
+- Save prompt on/off combinations as named presets
+- Quickly switch between different toggle configurations within the same preset
+- Create, rename, delete, and overwrite toggle presets
+- "Default" toggle preset is automatically created and cannot be deleted
 
 ## Settings
 
@@ -55,7 +60,12 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 ### 프롬프트 위치 지정
 - "+" 버튼으로 프롬프트 추가 시 삽입 위치 선택 가능
 - 프롬프트 편집에서 위치 변경 (저장 시 적용)
-- 모든 기능을 설정에서 개별적으로 켜고 끌 수 있음
+
+### 토글 프리셋
+- 프롬프트 on/off 조합을 이름을 붙여 저장
+- 같은 프리셋 안에서 다른 토글 구성으로 빠르게 전환
+- 토글 프리셋 생성, 이름 변경, 삭제, 덮어쓰기 가능
+- "기본" 토글 프리셋은 자동 생성되며 삭제 불가
 
 ## 설정
 
