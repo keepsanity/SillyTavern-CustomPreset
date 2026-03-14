@@ -80,6 +80,8 @@ const L = (() => {
         linkedPresetUnlinked: '연결 프리셋이 해제되었습니다.',
         linkedPresetApplied: (name) => `프리셋 "${name}" 자동 적용됨.`,
         linkedPresetNoChatOpen: '열린 채팅방이 없습니다.',
+        enableAutoSave: '프롬프트 자동 저장',
+        enableAutoSaveNote: '프롬프트 수정 저장 시 프리셋도 자동으로 저장합니다.',
     };
     const en = {
         quickPromptToggle: 'Quick Prompt Toggle',
@@ -154,6 +156,8 @@ const L = (() => {
         linkedPresetUnlinked: 'Linked preset unlinked.',
         linkedPresetApplied: (name) => `Preset "${name}" auto-applied.`,
         linkedPresetNoChatOpen: 'No chat is open.',
+        enableAutoSave: 'Auto-save Preset',
+        enableAutoSaveNote: 'Automatically saves the preset when saving a prompt edit.',
     };
     const locale = (getCurrentLocale() || '').toLowerCase();
     return locale.startsWith('ko') ? ko : en;
@@ -168,6 +172,7 @@ const FEATURE_DEFAULTS = {
     showPromptPositionFeature: true,
     showTogglePresetFeature: true,
     showLinkedPresetFeature: true,
+    autoSavePreset: false,
 };
 
 let isPanelOpen = false;
@@ -723,6 +728,9 @@ function observePromptPopupChanges() {
             applyQuickToggleDataToPrompt(promptId, quickData);
             if (selectedPosition) {
                 movePromptToPosition(promptId, selectedPosition);
+            }
+            if (getFeatureSettings().autoSavePreset) {
+                document.getElementById('update_oai_preset')?.click();
             }
         }, 0);
     }, true);
@@ -1724,6 +1732,28 @@ function createExtensionSettingsMenu() {
         applyFeatureVisibility();
     });
 
+    const row7 = document.createElement('label');
+    row7.className = 'checkbox_label';
+    row7.setAttribute('for', 'custom_preset_auto_save');
+    const toggleAutoSave = document.createElement('input');
+    toggleAutoSave.id = 'custom_preset_auto_save';
+    toggleAutoSave.type = 'checkbox';
+    toggleAutoSave.className = 'extension_enabled';
+    toggleAutoSave.checked = !!settings.autoSavePreset;
+    const text7 = document.createElement('span');
+    text7.innerHTML = `<strong>${L.enableAutoSave}</strong>`;
+    row7.appendChild(toggleAutoSave);
+    row7.appendChild(text7);
+
+    const note7 = document.createElement('small');
+    note7.className = 'notes';
+    note7.textContent = L.enableAutoSaveNote;
+
+    toggleAutoSave.addEventListener('change', () => {
+        settings.autoSavePreset = !!toggleAutoSave.checked;
+        saveFeatureSettings();
+    });
+
     drawerContent.appendChild(row1);
     drawerContent.appendChild(note1);
     // drawerContent.appendChild(separator);
@@ -1737,6 +1767,8 @@ function createExtensionSettingsMenu() {
     drawerContent.appendChild(note5);
     drawerContent.appendChild(row6);
     drawerContent.appendChild(note6);
+    drawerContent.appendChild(row7);
+    drawerContent.appendChild(note7);
     drawer.appendChild(drawerHeader);
     drawer.appendChild(drawerContent);
     container.appendChild(drawer);
