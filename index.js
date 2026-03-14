@@ -80,7 +80,7 @@ const L = (() => {
         linkedPresetUnlinked: '연결 프리셋이 해제되었습니다.',
         linkedPresetApplied: (name) => `프리셋 "${name}" 자동 적용됨.`,
         linkedPresetNoChatOpen: '열린 채팅방이 없습니다.',
-        enableAutoSave: '프롬프트 자동 저장',
+        enableAutoSave: '프리셋 자동 저장',
         enableAutoSaveNote: '프롬프트 수정 저장 시 프리셋도 자동으로 저장합니다.',
     };
     const en = {
