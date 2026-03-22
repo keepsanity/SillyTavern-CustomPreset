@@ -276,3 +276,24 @@
     min-width: 30px;
 }
 
+/* Compare Modal */
+.custom_preset_compare_modal {
+    min-width: 0;
+    max-width: 700px;
+    width: calc(100% - 20px);
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.custom_preset_compare_textarea {
+    width: 100%;
+    min-height: 220px;
+    max-height: 350px;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-sizing: border-box;
+}
+

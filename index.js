@@ -82,6 +82,13 @@ const L = (() => {
         linkedPresetNoChatOpen: '열린 채팅방이 없습니다.',
         enableAutoSave: '프리셋 자동 저장',
         enableAutoSaveNote: '프롬프트 수정 저장 시 프리셋도 자동으로 저장합니다.',
+        comparePrompt: '프롬프트 비교',
+        compareTitle: '프롬프트 비교',
+        compareDesc: '위쪽은 선택한 프롬프트(읽기 전용), 아래쪽은 비교 대상 프롬프트(편집 가능)입니다.',
+        compareSelectPrompt: '비교할 프롬프트 선택:',
+        compareSelectPlaceholder: '-- 프롬프트 선택 --',
+        compareSave: '저장',
+        compareSaved: (name) => `프롬프트 "${name}" 저장됨.`,
     };
     const en = {
         quickPromptToggle: 'Quick Prompt Toggle',
@@ -158,6 +165,13 @@ const L = (() => {
         linkedPresetNoChatOpen: 'No chat is open.',
         enableAutoSave: 'Auto-save Preset',
         enableAutoSaveNote: 'Automatically saves the preset when saving a prompt edit.',
+        comparePrompt: 'Compare prompt',
+        compareTitle: 'Compare Prompts',
+        compareDesc: 'Top is the selected prompt (read-only). Bottom is the comparison prompt (editable).',
+        compareSelectPrompt: 'Select prompt to compare:',
+        compareSelectPlaceholder: '-- Select prompt --',
+        compareSave: 'Save',
+        compareSaved: (name) => `Prompt "${name}" saved.`,
     };
     const locale = (getCurrentLocale() || '').toLowerCase();
     return locale.startsWith('ko') ? ko : en;
@@ -1183,6 +1197,168 @@ function renderQuickToggleButtons() {
 }
 
 /**
+ * Show compare modal for comparing two prompts
+ * @param {object} sourcePrompt - The prompt clicked in the customizer (read-only, shown on top)
+ */
+function showCompareModal(sourcePrompt) {
+    const preset = getActivePromptManagerPreset();
+    const orderedPrompts = getOrderedPrompts(preset).filter(({ prompt }) => prompt && prompt.name && !prompt.marker);
+
+    if (orderedPrompts.length === 0) return;
+
+    const removeModal = () => {
+        overlay.remove();
+        modal.remove();
+    };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'custom_preset_position_modal_overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'custom_preset_position_modal custom_preset_compare_modal';
+
+    // Title
+    const title = document.createElement('h3');
+    title.textContent = L.compareTitle;
+    title.style.marginBottom = '10px';
+
+    // Description
+    const desc = document.createElement('p');
+    desc.textContent = L.compareDesc;
+    desc.style.marginBottom = '14px';
+    desc.style.opacity = '0.7';
+    desc.style.fontSize = '0.9em';
+
+    // === Top section: source prompt (read-only) ===
+    const topLabel = document.createElement('label');
+    topLabel.textContent = sourcePrompt.name;
+    topLabel.style.fontWeight = '600';
+    topLabel.style.marginBottom = '4px';
+    topLabel.style.display = 'block';
+
+    const topTextarea = document.createElement('textarea');
+    topTextarea.className = 'text_pole custom_preset_compare_textarea';
+    topTextarea.value = sourcePrompt.content || '';
+    topTextarea.readOnly = true;
+    topTextarea.style.opacity = '0.8';
+
+    // === Bottom section: comparison prompt (editable) ===
+    const bottomLabel = document.createElement('label');
+    bottomLabel.textContent = L.compareSelectPrompt;
+    bottomLabel.style.fontWeight = '600';
+    bottomLabel.style.marginTop = '14px';
+    bottomLabel.style.marginBottom = '4px';
+    bottomLabel.style.display = 'block';
+
+    const select = document.createElement('select');
+    select.className = 'text_pole';
+    select.style.width = '100%';
+    select.style.marginBottom = '8px';
+
+    const placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.textContent = L.compareSelectPlaceholder;
+    placeholderOpt.disabled = true;
+    placeholderOpt.selected = true;
+    select.appendChild(placeholderOpt);
+
+    orderedPrompts.forEach(({ prompt }) => {
+        const option = document.createElement('option');
+        option.value = prompt.identifier;
+        option.textContent = prompt.name;
+        select.appendChild(option);
+    });
+
+    const bottomTextarea = document.createElement('textarea');
+    bottomTextarea.className = 'text_pole custom_preset_compare_textarea';
+    bottomTextarea.value = '';
+    bottomTextarea.placeholder = L.compareSelectPlaceholder;
+
+    // Track currently selected prompt for saving
+    let selectedPromptRef = null;
+
+    select.addEventListener('change', () => {
+        const found = orderedPrompts.find(({ prompt }) => prompt.identifier === select.value);
+        if (found) {
+            selectedPromptRef = found.prompt;
+            bottomTextarea.value = found.prompt.content || '';
+        }
+    });
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '8px';
+    btnRow.style.justifyContent = 'flex-end';
+    btnRow.style.marginTop = '10px';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'menu_button';
+    cancelBtn.textContent = L.cancel;
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeModal();
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'menu_button';
+    saveBtn.textContent = L.compareSave;
+    saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!selectedPromptRef) return;
+        selectedPromptRef.content = bottomTextarea.value;
+        saveSettingsDebounced();
+        if (getFeatureSettings().autoSavePreset) {
+            document.getElementById('update_oai_preset')?.click();
+        }
+        toastr.success(L.compareSaved(selectedPromptRef.name));
+        removeModal();
+        // Re-render the prompt list to reflect changes
+        const presetSelect = document.getElementById('custom_preset_select');
+        if (presetSelect) {
+            const currentPreset = getPresetByName(presetSelect.value);
+            renderPromptList(currentPreset);
+        }
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(saveBtn);
+
+    // Assemble modal
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(topLabel);
+    modal.appendChild(topTextarea);
+    modal.appendChild(bottomLabel);
+    modal.appendChild(select);
+    modal.appendChild(bottomTextarea);
+    modal.appendChild(btnRow);
+
+    // Prevent events from bubbling
+    const stopAll = (e) => e.stopPropagation();
+    for (const evt of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
+        modal.addEventListener(evt, stopAll);
+        overlay.addEventListener(evt, stopAll);
+    }
+    overlay.addEventListener('click', () => removeModal());
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+
+    // Center modal
+    requestAnimationFrame(() => {
+        const modalHeight = modal.offsetHeight;
+        const modalWidth = modal.offsetWidth;
+        const viewH = window.innerHeight;
+        const viewW = window.innerWidth;
+        modal.style.top = Math.max(10, (viewH - modalHeight) / 2) + 'px';
+        modal.style.left = Math.max(10, (viewW - modalWidth) / 2) + 'px';
+    });
+}
+
+/**
  * Render prompt list for selected preset
  * @param {object} preset - Selected preset object
  */
@@ -1271,6 +1447,19 @@ function renderPromptList(preset) {
         }
 
         actions.appendChild(copyBtn);
+
+        // Compare button (only for non-marker prompts)
+        if (!isMarker) {
+            const compareBtn = document.createElement('button');
+            compareBtn.className = 'menu_button';
+            compareBtn.innerHTML = '<i class="fa-solid fa-code-compare"></i>';
+            compareBtn.title = L.comparePrompt;
+            compareBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showCompareModal(prompt);
+            });
+            actions.appendChild(compareBtn);
+        }
 
         header.appendChild(name);
         header.appendChild(role);
