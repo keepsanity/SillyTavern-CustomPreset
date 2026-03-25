@@ -560,7 +560,7 @@ function ensureQuickTogglePopupControls() {
 
     const quickRow = document.createElement('div');
     quickRow.id = 'custom_preset_quick_toggle_row_container';
-    quickRow.className = 'flex-container gap10px';
+    quickRow.className = 'flex-container flexFlowColumn gap10px';
 
     const quickBlock = document.createElement('div');
     quickBlock.id = 'custom_preset_quick_toggle_block';
