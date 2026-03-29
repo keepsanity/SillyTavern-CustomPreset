@@ -287,8 +287,8 @@
 
 .custom_preset_compare_textarea {
     width: 100%;
-    min-height: 220px;
-    max-height: 350px;
+    min-height: 300px;
+    max-height: 450px;
     resize: vertical;
     font-family: monospace;
     font-size: 0.9em;
@@ -296,4 +296,5 @@
     word-break: break-word;
     box-sizing: border-box;
 }
+
 

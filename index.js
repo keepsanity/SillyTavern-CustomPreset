@@ -89,6 +89,8 @@ const L = (() => {
         compareSelectPlaceholder: '-- 프롬프트 선택 --',
         compareSave: '저장',
         compareSaved: (name) => `프롬프트 "${name}" 저장됨.`,
+        enableAutoConnect: '프롬프트 자동 연결',
+        enableAutoConnectNote: '새 프롬프트 생성 시 prompt_order에 자동으로 연결합니다.',
     };
     const en = {
         quickPromptToggle: 'Quick Prompt Toggle',
@@ -172,6 +174,8 @@ const L = (() => {
         compareSelectPlaceholder: '-- Select prompt --',
         compareSave: 'Save',
         compareSaved: (name) => `Prompt "${name}" saved.`,
+        enableAutoConnect: 'Auto-connect Prompts',
+        enableAutoConnectNote: 'Automatically links new prompts to prompt_order on creation.',
     };
     const locale = (getCurrentLocale() || '').toLowerCase();
     return locale.startsWith('ko') ? ko : en;
@@ -187,6 +191,7 @@ const FEATURE_DEFAULTS = {
     showTogglePresetFeature: true,
     showLinkedPresetFeature: true,
     autoSavePreset: false,
+    autoConnectPrompt: true,
 };
 
 let isPanelOpen = false;
@@ -625,6 +630,7 @@ function ensureQuickTogglePopupControls() {
     quickRow.appendChild(positionBlock);
     quickRow.appendChild(quickBlock);
     baseRow.insertAdjacentElement('afterend', quickRow);
+
 }
 
 function readQuickToggleForm() {
@@ -692,7 +698,8 @@ function loadPositionSelectForPrompt(promptId) {
     }
 
     const isCurrentLinked = promptOrderEntry.order.some(item => item.identifier === promptId);
-    if (!isCurrentLinked) {
+    const isNewPrompt = !promptManager?.getPromptById?.(promptId);
+    if (!isCurrentLinked && !(isNewPrompt && getFeatureSettings().autoConnectPrompt)) {
         select.disabled = true;
         return;
     }
@@ -738,7 +745,18 @@ function observePromptPopupChanges() {
         const quickData = readQuickToggleForm();
         const positionSelect = document.getElementById('custom_preset_position_select');
         const selectedPosition = positionSelect?.value || '';
+        // Check if this is a new prompt (not yet in promptManager) before save fires
+        const isNewPrompt = !promptManager?.getPromptById?.(promptId);
         setTimeout(() => {
+            // Auto-connect: if it was a new prompt and feature is enabled, link it to prompt_order
+            if (isNewPrompt && getFeatureSettings().autoConnectPrompt) {
+                const addedPrompt = promptManager?.getPromptById?.(promptId);
+                if (addedPrompt && promptManager.activeCharacter) {
+                    promptManager.appendPrompt(addedPrompt, promptManager.activeCharacter);
+                    promptManager.saveServiceSettings();
+                    promptManager.render();
+                }
+            }
             applyQuickToggleDataToPrompt(promptId, quickData);
             if (selectedPosition) {
                 movePromptToPosition(promptId, selectedPosition);
@@ -1943,6 +1961,28 @@ function createExtensionSettingsMenu() {
         saveFeatureSettings();
     });
 
+    const row8 = document.createElement('label');
+    row8.className = 'checkbox_label';
+    row8.setAttribute('for', 'custom_preset_auto_connect');
+    const toggleAutoConnect = document.createElement('input');
+    toggleAutoConnect.id = 'custom_preset_auto_connect';
+    toggleAutoConnect.type = 'checkbox';
+    toggleAutoConnect.className = 'extension_enabled';
+    toggleAutoConnect.checked = settings.autoConnectPrompt !== false;
+    const text8 = document.createElement('span');
+    text8.innerHTML = `<strong>${L.enableAutoConnect}</strong>`;
+    row8.appendChild(toggleAutoConnect);
+    row8.appendChild(text8);
+
+    const note8 = document.createElement('small');
+    note8.className = 'notes';
+    note8.textContent = L.enableAutoConnectNote;
+
+    toggleAutoConnect.addEventListener('change', () => {
+        settings.autoConnectPrompt = !!toggleAutoConnect.checked;
+        saveFeatureSettings();
+    });
+
     drawerContent.appendChild(row1);
     drawerContent.appendChild(note1);
     // drawerContent.appendChild(separator);
@@ -1958,6 +1998,8 @@ function createExtensionSettingsMenu() {
     drawerContent.appendChild(note6);
     drawerContent.appendChild(row7);
     drawerContent.appendChild(note7);
+    drawerContent.appendChild(row8);
+    drawerContent.appendChild(note8);
     drawer.appendChild(drawerHeader);
     drawer.appendChild(drawerContent);
     container.appendChild(drawer);
