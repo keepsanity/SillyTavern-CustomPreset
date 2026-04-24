@@ -91,6 +91,28 @@ const L = (() => {
         compareSaved: (name) => `프롬프트 "${name}" 저장됨.`,
         enableAutoConnect: '프롬프트 자동 연결',
         enableAutoConnectNote: '새 프롬프트 생성 시 prompt_order에 자동으로 연결합니다.',
+        enableTranslate: '번역 기능 사용',
+        enableTranslateNote: '프롬프트 편집창에 번역 버튼을 표시합니다.',
+        translate: '번역',
+        viewTranslation: '번역 보기',
+        deleteTranslation: '번역 삭제',
+        translationDeleted: '번역이 삭제되었습니다.',
+        deleteTranslationConfirm: '저장된 번역을 삭제하시겠습니까?',
+        retranslate: '재번역',
+        translating: '번역 중...',
+        translateNoProfile: '설정에서 번역 프로필을 먼저 선택해주세요.',
+        translateNoConnectionManager: 'Connection Manager가 필요합니다.',
+        translateEmpty: '번역할 내용이 비어있습니다.',
+        translateSuccess: '번역 완료.',
+        translateFailed: (msg) => `번역 실패: ${msg}`,
+        translateModalTitle: '번역 보기',
+        translateOriginal: '원본',
+        translateTranslated: '번역',
+        translationProfile: '번역 프로필',
+        translationProfileNote: '번역에 사용할 Connection Profile을 선택합니다.',
+        translationPromptTemplate: '번역 프롬프트 템플릿',
+        translationPromptTemplateNote: '{content} 자리에 원문이 들어갑니다.',
+        translationDefault: 'Please translate the following text into natural Korean. Output only the translated text without any commentary:\n\n{content}',
     };
     const en = {
         quickPromptToggle: 'Quick Prompt Toggle',
@@ -176,6 +198,28 @@ const L = (() => {
         compareSaved: (name) => `Prompt "${name}" saved.`,
         enableAutoConnect: 'Auto-connect Prompts',
         enableAutoConnectNote: 'Automatically links new prompts to prompt_order on creation.',
+        enableTranslate: 'Enable Translate',
+        enableTranslateNote: 'Shows the translate button in the prompt editor.',
+        translate: 'Translate',
+        viewTranslation: 'View Translation',
+        deleteTranslation: 'Delete Translation',
+        translationDeleted: 'Translation deleted.',
+        deleteTranslationConfirm: 'Delete the saved translation?',
+        retranslate: 'Re-translate',
+        translating: 'Translating...',
+        translateNoProfile: 'Please select a translation profile in settings first.',
+        translateNoConnectionManager: 'Connection Manager is required.',
+        translateEmpty: 'Nothing to translate.',
+        translateSuccess: 'Translation completed.',
+        translateFailed: (msg) => `Translation failed: ${msg}`,
+        translateModalTitle: 'Translation',
+        translateOriginal: 'Original',
+        translateTranslated: 'Translated',
+        translationProfile: 'Translation Profile',
+        translationProfileNote: 'Select the Connection Profile to use for translation.',
+        translationPromptTemplate: 'Translation Prompt Template',
+        translationPromptTemplateNote: '{content} will be replaced with the original text.',
+        translationDefault: 'Translate the following text to English naturally. Output only the translation without any commentary:\n\n{content}',
     };
     const locale = (getCurrentLocale() || '').toLowerCase();
     return locale.startsWith('ko') ? ko : en;
@@ -192,6 +236,10 @@ const FEATURE_DEFAULTS = {
     showLinkedPresetFeature: true,
     autoSavePreset: false,
     autoConnectPrompt: true,
+    showTranslateFeature: false,
+    translationProfileId: '',
+    translationPromptTemplate: '',
+    translations: {},
 };
 
 let isPanelOpen = false;
@@ -645,6 +693,7 @@ function readQuickToggleForm() {
 function loadQuickToggleFormForPrompt(promptId) {
     ensureQuickTogglePopupControls();
     loadPositionSelectForPrompt(promptId);
+    ensureTranslateButtonInPopup();
 
     const nameInput = document.getElementById('custom_preset_quick_toggle_name');
     const enabledInput = document.getElementById('custom_preset_quick_toggle_enabled');
@@ -1376,6 +1425,298 @@ function showCompareModal(sourcePrompt) {
     });
 }
 
+// === Translation feature ===
+
+function getStoredTranslation(promptId) {
+    const settings = getFeatureSettings();
+    if (!settings.translations || typeof settings.translations !== 'object') return null;
+    const entry = settings.translations[promptId];
+    if (!entry || !entry.translated) return null;
+    return entry;
+}
+
+function setStoredTranslation(promptId, original, translated) {
+    const settings = getFeatureSettings();
+    if (!settings.translations || typeof settings.translations !== 'object') {
+        settings.translations = {};
+    }
+    settings.translations[promptId] = {
+        original,
+        translated,
+        translatedAt: Date.now(),
+    };
+    saveFeatureSettings();
+}
+
+function deleteStoredTranslation(promptId) {
+    const settings = getFeatureSettings();
+    if (!settings.translations || typeof settings.translations !== 'object') return;
+    delete settings.translations[promptId];
+    saveFeatureSettings();
+}
+
+function buildTranslationPrompt(content) {
+    const settings = getFeatureSettings();
+    const template = (settings.translationPromptTemplate || '').trim() || L.translationDefault;
+    if (template.includes('{content}')) {
+        return template.replace('{content}', content);
+    }
+    return `${template}\n\n${content}`;
+}
+
+async function translatePromptContent(promptId, content) {
+    const settings = getFeatureSettings();
+    const profileId = settings.translationProfileId;
+    if (!profileId) {
+        toastr.warning(L.translateNoProfile);
+        return null;
+    }
+
+    const trimmed = (content || '').trim();
+    if (!trimmed) {
+        toastr.warning(L.translateEmpty);
+        return null;
+    }
+
+    const context = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+    if (!context?.ConnectionManagerRequestService) {
+        toastr.error(L.translateNoConnectionManager);
+        return null;
+    }
+
+    try {
+        const userPrompt = buildTranslationPrompt(content);
+        const messages = [
+            { role: 'system', content: 'You are a professional translator. Output ONLY the translated text without any commentary.' },
+            { role: 'user', content: userPrompt },
+        ];
+
+        const response = await context.ConnectionManagerRequestService.sendRequest(
+            profileId,
+            messages,
+            32000,
+            { stream: false, extractData: true, includePreset: false, includeInstruct: false },
+        );
+
+        let translated = '';
+        if (typeof response === 'string') {
+            translated = response;
+        } else if (response?.choices?.[0]?.message) {
+            translated = response.choices[0].message.content || '';
+        } else {
+            translated = response?.content || response?.message || '';
+        }
+
+        translated = (translated || '').trim();
+        if (!translated) throw new Error('empty response');
+
+        setStoredTranslation(promptId, content, translated);
+        toastr.success(L.translateSuccess);
+        return translated;
+    } catch (err) {
+        console.error('[CustomPreset] Translation failed:', err);
+        toastr.error(L.translateFailed(err.message || String(err)));
+        return null;
+    }
+}
+
+function showTranslationModal(promptId, promptName) {
+    const entry = getStoredTranslation(promptId);
+    if (!entry) return;
+
+    const removeModal = () => {
+        overlay.remove();
+        modal.remove();
+    };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'custom_preset_position_modal_overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'custom_preset_position_modal custom_preset_compare_modal';
+
+    const title = document.createElement('h3');
+    title.textContent = `${L.translateModalTitle}: ${promptName || ''}`;
+    title.style.marginBottom = '10px';
+
+    const originalLabel = document.createElement('label');
+    originalLabel.textContent = L.translateOriginal;
+    originalLabel.style.fontWeight = '600';
+    originalLabel.style.marginBottom = '4px';
+    originalLabel.style.display = 'block';
+
+    const originalArea = document.createElement('textarea');
+    originalArea.className = 'text_pole custom_preset_compare_textarea';
+    originalArea.value = entry.original || '';
+    originalArea.readOnly = true;
+    originalArea.style.opacity = '0.8';
+
+    const translatedLabel = document.createElement('label');
+    translatedLabel.textContent = L.translateTranslated;
+    translatedLabel.style.fontWeight = '600';
+    translatedLabel.style.marginTop = '14px';
+    translatedLabel.style.marginBottom = '4px';
+    translatedLabel.style.display = 'block';
+
+    const translatedArea = document.createElement('textarea');
+    translatedArea.className = 'text_pole custom_preset_compare_textarea';
+    translatedArea.value = entry.translated || '';
+    translatedArea.readOnly = true;
+
+    const btnRow = document.createElement('div');
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '8px';
+    btnRow.style.justifyContent = 'flex-end';
+    btnRow.style.marginTop = '10px';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'menu_button';
+    closeBtn.textContent = L.cancel;
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeModal();
+    });
+
+    btnRow.appendChild(closeBtn);
+
+    modal.appendChild(title);
+    modal.appendChild(originalLabel);
+    modal.appendChild(originalArea);
+    modal.appendChild(translatedLabel);
+    modal.appendChild(translatedArea);
+    modal.appendChild(btnRow);
+
+    const stopAll = (e) => e.stopPropagation();
+    for (const evt of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
+        modal.addEventListener(evt, stopAll);
+        overlay.addEventListener(evt, stopAll);
+    }
+    overlay.addEventListener('click', () => removeModal());
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(() => {
+        const modalHeight = modal.offsetHeight;
+        const modalWidth = modal.offsetWidth;
+        const viewH = window.innerHeight;
+        const viewW = window.innerWidth;
+        modal.style.top = Math.max(10, (viewH - modalHeight) / 2) + 'px';
+        modal.style.left = Math.max(10, (viewW - modalWidth) / 2) + 'px';
+    });
+}
+
+function ensureTranslateButtonInPopup() {
+    const editPopup = document.getElementById('completion_prompt_manager_popup_edit');
+    if (!editPopup) return;
+    const promptLabel = editPopup.querySelector('label[for="completion_prompt_manager_popup_entry_form_prompt"]');
+    if (!promptLabel) return;
+
+    const labelContainer = promptLabel.closest('.flex1');
+    if (!labelContainer) return;
+
+    // Use the parent flex-container so buttons sit on the far right
+    const flexRow = labelContainer.parentElement;
+    if (!flexRow) return;
+
+    // Remove existing buttons to refresh state
+    const existing = document.getElementById('custom_preset_translate_btn_group');
+    if (existing) existing.remove();
+
+    if (!getFeatureSettings().showTranslateFeature) return;
+
+    const saveBtn = document.getElementById('completion_prompt_manager_popup_entry_form_save');
+    const promptId = saveBtn?.dataset?.pmPrompt;
+    if (!promptId) return;
+
+    const btnGroup = document.createElement('span');
+    btnGroup.id = 'custom_preset_translate_btn_group';
+    btnGroup.className = 'custom_preset_translate_btn_group';
+
+    const stored = getStoredTranslation(promptId);
+
+    const renderButtons = () => {
+        btnGroup.innerHTML = '';
+        const current = getStoredTranslation(promptId);
+
+        if (!current) {
+            const translateBtn = document.createElement('button');
+            translateBtn.type = 'button';
+            translateBtn.className = 'menu_button custom_preset_translate_btn';
+            translateBtn.title = L.translate;
+            translateBtn.innerHTML = `<i class="fa-solid fa-language"></i>`;
+            translateBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const textarea = document.getElementById('completion_prompt_manager_popup_entry_form_prompt');
+                const content = textarea?.value || '';
+                translateBtn.disabled = true;
+                translateBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+                const result = await translatePromptContent(promptId, content);
+                if (result) {
+                    renderButtons();
+                } else {
+                    translateBtn.disabled = false;
+                    translateBtn.innerHTML = `<i class="fa-solid fa-language"></i>`;
+                }
+            });
+            btnGroup.appendChild(translateBtn);
+        } else {
+            const promptName = (document.getElementById('completion_prompt_manager_popup_entry_form_name')?.value || '').trim();
+
+            const viewBtn = document.createElement('button');
+            viewBtn.type = 'button';
+            viewBtn.className = 'menu_button custom_preset_translate_btn';
+            viewBtn.title = L.viewTranslation;
+            viewBtn.innerHTML = `<i class="fa-solid fa-book-open"></i>`;
+            viewBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showTranslationModal(promptId, promptName);
+            });
+
+            const retranslateBtn = document.createElement('button');
+            retranslateBtn.type = 'button';
+            retranslateBtn.className = 'menu_button custom_preset_translate_btn';
+            retranslateBtn.title = L.retranslate;
+            retranslateBtn.innerHTML = `<i class="fa-solid fa-rotate"></i>`;
+            retranslateBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const textarea = document.getElementById('completion_prompt_manager_popup_entry_form_prompt');
+                const content = textarea?.value || '';
+                retranslateBtn.disabled = true;
+                viewBtn.disabled = true;
+                retranslateBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+                const result = await translatePromptContent(promptId, content);
+                renderButtons();
+            });
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'menu_button custom_preset_translate_btn custom_preset_translate_delete_btn';
+            deleteBtn.title = L.deleteTranslation;
+            deleteBtn.innerHTML = `<i class="fa-solid fa-trash"></i>`;
+            deleteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!confirm(L.deleteTranslationConfirm)) return;
+                deleteStoredTranslation(promptId);
+                toastr.success(L.translationDeleted);
+                renderButtons();
+            });
+
+            btnGroup.appendChild(viewBtn);
+            btnGroup.appendChild(retranslateBtn);
+            btnGroup.appendChild(deleteBtn);
+        }
+    };
+
+    renderButtons();
+    flexRow.appendChild(btnGroup);
+}
+
 /**
  * Render prompt list for selected preset
  * @param {object} preset - Selected preset object
@@ -1983,6 +2324,79 @@ function createExtensionSettingsMenu() {
         saveFeatureSettings();
     });
 
+    // Translation feature section
+    const translationSeparator = document.createElement('hr');
+    translationSeparator.className = 'm-t-1 m-b-1';
+
+    const row9 = document.createElement('label');
+    row9.className = 'checkbox_label';
+    row9.setAttribute('for', 'custom_preset_show_translate_feature');
+    const toggleTranslate = document.createElement('input');
+    toggleTranslate.id = 'custom_preset_show_translate_feature';
+    toggleTranslate.type = 'checkbox';
+    toggleTranslate.className = 'extension_enabled';
+    toggleTranslate.checked = !!settings.showTranslateFeature;
+    const text9 = document.createElement('span');
+    text9.innerHTML = `<strong>${L.enableTranslate}</strong>`;
+    row9.appendChild(toggleTranslate);
+    row9.appendChild(text9);
+
+    const note9 = document.createElement('small');
+    note9.className = 'notes';
+    note9.textContent = L.enableTranslateNote;
+
+    toggleTranslate.addEventListener('change', () => {
+        settings.showTranslateFeature = !!toggleTranslate.checked;
+        saveFeatureSettings();
+        // Toggle visibility of translation sub-options
+        const subVisible = settings.showTranslateFeature ? '' : 'none';
+        translationProfileLabel.style.display = subVisible || 'block';
+        translationProfileSelect.style.display = subVisible;
+        translationProfileNote.style.display = subVisible;
+        translationTemplateLabel.style.display = subVisible || 'block';
+        translationTemplateArea.style.display = subVisible;
+        translationTemplateNote.style.display = subVisible;
+    });
+
+    const translationProfileLabel = document.createElement('label');
+    translationProfileLabel.setAttribute('for', 'custom_preset_translation_profile');
+    translationProfileLabel.innerHTML = `<strong>${L.translationProfile}</strong>`;
+    translationProfileLabel.style.display = 'block';
+    translationProfileLabel.style.marginBottom = '4px';
+
+    const translationProfileSelect = document.createElement('select');
+    translationProfileSelect.id = 'custom_preset_translation_profile';
+    translationProfileSelect.className = 'text_pole';
+
+    const translationProfileNote = document.createElement('small');
+    translationProfileNote.className = 'notes';
+    translationProfileNote.textContent = L.translationProfileNote;
+
+    const translationTemplateLabel = document.createElement('label');
+    translationTemplateLabel.setAttribute('for', 'custom_preset_translation_template');
+    translationTemplateLabel.innerHTML = `<strong>${L.translationPromptTemplate}</strong>`;
+    translationTemplateLabel.style.display = 'block';
+    translationTemplateLabel.style.marginTop = '10px';
+    translationTemplateLabel.style.marginBottom = '4px';
+
+    const translationTemplateArea = document.createElement('textarea');
+    translationTemplateArea.id = 'custom_preset_translation_template';
+    translationTemplateArea.className = 'text_pole';
+    translationTemplateArea.rows = 4;
+    if (typeof settings.translationPromptTemplate !== 'string' || settings.translationPromptTemplate === '') {
+        settings.translationPromptTemplate = L.translationDefault;
+        saveFeatureSettings();
+    }
+    translationTemplateArea.value = settings.translationPromptTemplate;
+    translationTemplateArea.addEventListener('input', () => {
+        settings.translationPromptTemplate = translationTemplateArea.value;
+        saveFeatureSettings();
+    });
+
+    const translationTemplateNote = document.createElement('small');
+    translationTemplateNote.className = 'notes';
+    translationTemplateNote.textContent = L.translationPromptTemplateNote;
+
     drawerContent.appendChild(row1);
     drawerContent.appendChild(note1);
     // drawerContent.appendChild(separator);
@@ -2000,10 +2414,45 @@ function createExtensionSettingsMenu() {
     drawerContent.appendChild(note7);
     drawerContent.appendChild(row8);
     drawerContent.appendChild(note8);
+    drawerContent.appendChild(translationSeparator);
+    drawerContent.appendChild(row9);
+    drawerContent.appendChild(note9);
+    drawerContent.appendChild(translationProfileLabel);
+    drawerContent.appendChild(translationProfileSelect);
+    drawerContent.appendChild(translationProfileNote);
+    drawerContent.appendChild(translationTemplateLabel);
+    drawerContent.appendChild(translationTemplateArea);
+    drawerContent.appendChild(translationTemplateNote);
     drawer.appendChild(drawerHeader);
     drawer.appendChild(drawerContent);
     container.appendChild(drawer);
     settingsRoot.appendChild(container);
+
+    // Initialize Connection Profile dropdown
+    try {
+        const context = (typeof SillyTavern !== 'undefined' && SillyTavern.getContext) ? SillyTavern.getContext() : null;
+        if (context?.ConnectionManagerRequestService) {
+            context.ConnectionManagerRequestService.handleDropdown(
+                '#custom_preset_translation_profile',
+                settings.translationProfileId || '',
+                (profile) => {
+                    settings.translationProfileId = profile?.id ?? '';
+                    saveFeatureSettings();
+                },
+            );
+        }
+    } catch (e) {
+        console.warn('[CustomPreset] Connection Manager not available:', e);
+    }
+
+    // Initial visibility for translation sub-options
+    const subVisible = settings.showTranslateFeature ? '' : 'none';
+    translationProfileLabel.style.display = subVisible || 'block';
+    translationProfileSelect.style.display = subVisible;
+    translationProfileNote.style.display = subVisible;
+    translationTemplateLabel.style.display = subVisible || 'block';
+    translationTemplateArea.style.display = subVisible;
+    translationTemplateNote.style.display = subVisible;
 }
 
 function applyFeatureVisibility() {

@@ -1,5 +1,30 @@
 /* Custom Preset Manager Styles */
 
+.custom_preset_translate_btn_group {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.custom_preset_translate_btn {
+    font-size: 0.85em;
+    padding: 3px 8px;
+    white-space: nowrap;
+}
+
+.custom_preset_translate_btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.custom_preset_translate_delete_btn {
+    color: var(--warning, #c4554d);
+}
+
+
 #custom_preset_container {
     margin-bottom: 10px;
     width: 100%;
