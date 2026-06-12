@@ -322,4 +322,485 @@
     box-sizing: border-box;
 }
 
+/* ===== Prompt Preview Modal (glass / soft cards) ===== */
+.custom_preset_preview_overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background-color: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+}
 
+.custom_preset_preview_modal {
+    position: relative;
+    background:
+        linear-gradient(160deg,
+            color-mix(in srgb, var(--SmartThemeBlurTintColor) 88%, #ffffff 12%),
+            var(--SmartThemeBlurTintColor) 60%);
+    backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
+    -webkit-backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 60%, transparent);
+    border-radius: 18px;
+    box-shadow:
+        0 18px 50px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    width: 780px;
+    max-width: 100%;
+    max-height: 90vh;
+    max-height: 90dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 16px;
+    gap: 12px;
+    box-sizing: border-box;
+    color: var(--SmartThemeBodyColor);
+}
+
+@media (max-width: 600px) {
+    .custom_preset_preview_overlay {
+        padding: 8px;
+    }
+
+    .custom_preset_preview_modal {
+        width: 100%;
+        max-height: 95vh;
+        max-height: 95dvh;
+        padding: 14px 12px 12px;
+        gap: 10px;
+        border-radius: 14px;
+    }
+
+    .custom_preset_preview_toolbar {
+        flex-wrap: wrap;
+    }
+}
+
+.custom_preset_preview_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.custom_preset_preview_header h3 {
+    margin: 0;
+    font-size: 1.05em;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.custom_preset_preview_stats {
+    font-size: 0.72em;
+    opacity: 0.85;
+    white-space: nowrap;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #888) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor, #888) 25%, transparent);
+}
+
+.custom_preset_preview_toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.custom_preset_preview_search_wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.custom_preset_preview_search_icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.5;
+    pointer-events: none;
+    font-size: 0.85em;
+}
+
+.custom_preset_preview_search {
+    width: 100%;
+    padding-left: 32px !important;
+    border-radius: 999px !important;
+    box-sizing: border-box;
+}
+
+.custom_preset_preview_actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.custom_preset_preview_action_btn {
+    width: auto;
+    padding: 5px 10px;
+    min-width: 34px;
+    flex-direction: row;
+    border-radius: 10px;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.custom_preset_preview_action_btn:active {
+    transform: scale(0.93);
+}
+
+/* Theme-safe active state: translucent accent tint + theme text (readable on light & dark) */
+.custom_preset_preview_action_btn.toggled {
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #6aa0ff) 32%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--SmartThemeQuoteColor, #6aa0ff) 60%, transparent);
+    color: var(--SmartThemeBodyColor);
+    opacity: 1;
+}
+
+.custom_preset_preview_list {
+    flex: 1 1 auto;
+    min-height: 0; /* critical: lets the list shrink & scroll inside the flex column */
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 2px 6px 2px 2px;
+    margin: 0 -4px 0 0;
+}
+
+.custom_preset_preview_empty {
+    text-align: center;
+    opacity: 0.55;
+    padding: 32px 0;
+    font-size: 0.9em;
+}
+
+/* ----- Card ----- */
+.custom_preset_preview_card {
+    --role-color: #94a3b8;
+    flex-shrink: 0; /* don't squish cards; the list scrolls instead */
+    border: 1px solid color-mix(in srgb, var(--role-color) 28%, transparent);
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--role-color) 13%, transparent),
+            color-mix(in srgb, var(--role-color) 3%, transparent));
+    box-shadow:
+        inset 3px 0 0 var(--role-color),
+        0 2px 10px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+    transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+
+.custom_preset_preview_card:hover {
+    border-color: color-mix(in srgb, var(--role-color) 55%, transparent);
+    box-shadow:
+        inset 3px 0 0 var(--role-color),
+        0 5px 18px rgba(0, 0, 0, 0.3);
+}
+
+.custom_preset_preview_card_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.custom_preset_preview_card_header:hover {
+    background-color: color-mix(in srgb, var(--role-color) 8%, transparent);
+}
+
+.custom_preset_preview_card_left {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.custom_preset_preview_chevron {
+    font-size: 0.75em;
+    opacity: 0.55;
+    transition: transform 0.18s ease;
+}
+
+.custom_preset_preview_card.collapsed .custom_preset_preview_chevron {
+    transform: rotate(-90deg);
+}
+
+.custom_preset_preview_badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg,
+        var(--role-color),
+        color-mix(in srgb, var(--role-color) 65%, #000 35%));
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--role-color) 45%, transparent);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+    white-space: nowrap;
+}
+
+.custom_preset_preview_index {
+    font-size: 0.72em;
+    opacity: 0.5;
+    font-weight: 600;
+}
+
+.custom_preset_preview_len,
+.custom_preset_preview_tok {
+    font-size: 0.7em;
+    opacity: 0.45;
+    white-space: nowrap;
+}
+
+.custom_preset_preview_raw {
+    flex: 1 1 auto;
+    height: auto;          /* override .text_pole's height:fit-content so it can grow */
+    min-height: 55vh;      /* keep a usable height even when the modal shrinks to content */
+    width: 100%;
+    resize: vertical;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.82em;
+    line-height: 1.5;
+    white-space: pre-wrap;   /* wrap long lines instead of horizontal scroll */
+    word-break: break-word;
+    overflow-x: hidden;
+    overflow-y: auto;
+    box-sizing: border-box;
+    tab-size: 2;
+}
+
+.custom_preset_preview_card_copy {
+    opacity: 0.45;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.custom_preset_preview_card_copy:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, var(--role-color) 18%, transparent);
+}
+
+.custom_preset_preview_card_body {
+    padding: 0 14px 13px 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.88em;
+    line-height: 1.55;
+    opacity: 0.95;
+    /* No inner scroll: the whole list is the single scroll container (avoids nested scroll traps). */
+}
+
+.custom_preset_preview_card.collapsed .custom_preset_preview_card_body {
+    display: none;
+}
+
+.custom_preset_preview_nocontent {
+    opacity: 0.4;
+    font-style: italic;
+}
+
+.custom_preset_preview_mark {
+    background-color: var(--golden, #e0a800);
+    color: #000;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-weight: 600;
+}
+
+.custom_preset_preview_footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Override .menu_button's width:min-content (which stacks Korean text vertically) */
+.custom_preset_preview_footer .menu_button {
+    width: auto;
+    min-width: 0;
+    flex-direction: row;
+    white-space: nowrap;
+    gap: 6px;
+    border-radius: 10px;
+    padding: 7px 18px;
+    margin: 0;
+    color: var(--SmartThemeBodyColor); /* theme text, visible on light & dark */
+}
+
+/* Destructive cancel button: red outline (border + text), transparent fill */
+.custom_preset_preview_footer .menu_button.custom_preset_preview_cancel_btn:hover {
+    background: rgba(224, 85, 90, 0.14) !important;
+}
+
+/* ----- Role accent colors (drive card bg, accent bar & badge via --role-color) ----- */
+.custom_preset_preview_card.role_system { --role-color: #c084fc; }
+.custom_preset_preview_card.role_user { --role-color: #34d399; }
+.custom_preset_preview_card.role_assistant { --role-color: #60a5fa; }
+.custom_preset_preview_card.role_tool { --role-color: #fb923c; }
+.custom_preset_preview_card.role_prompt { --role-color: #94a3b8; }
+.custom_preset_preview_card.role_unknown { --role-color: #9ca3af; }
+
+/* ----- Title + read-only mode chip ----- */
+.custom_preset_preview_titlewrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.custom_preset_preview_modechip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.custom_preset_preview_modechip.is_dry {
+    background: linear-gradient(135deg, #64748b, #475569);
+}
+
+.custom_preset_preview_modechip.is_intercept {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.custom_preset_preview_modehint {
+    font-size: 0.72em;
+    opacity: 0.6;
+    margin-top: -6px;
+    padding-left: 2px;
+    flex-shrink: 0;
+}
+
+/* ----- Cancel-generation button (intercept mode) ----- */
+/* ----- Intercept ON state on the wand menu item ----- */
+#custom_preset_prompt_intercept_menu_item.cpm_preview_armed,
+#custom_preset_prompt_intercept_menu_item.cpm_preview_armed i {
+    color: #f59e0b;
+}
+
+#custom_preset_prompt_intercept_menu_item.cpm_preview_armed i {
+    animation: cpm_preview_pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cpm_preview_pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* ----- Small "preview" eye button next to "Prompts" in the prompt manager header ----- */
+.completion_prompt_manager_header_advanced {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.custom_preset_header_preview_btn {
+    font-size: 0.9em;
+    opacity: 0.45;
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 6px;
+    transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.custom_preset_header_preview_btn:hover {
+    opacity: 1;
+    color: var(--SmartThemeQuoteColor, #6aa0ff);
+    background-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #6aa0ff) 18%, transparent);
+}
+
+/* Right-side action icon group in card header (keeps edit + copy together) */
+.custom_preset_preview_card_actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+/* ----- Per-card edit button (intercept mode) ----- */
+.custom_preset_preview_card_edit {
+    font-size: 0.78em;
+    opacity: 0.35;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    margin-right: 2px;
+}
+
+.custom_preset_preview_card_edit:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, var(--role-color) 18%, transparent);
+}
+
+/* Editing state: card gets a subtle outline */
+.custom_preset_preview_card.is_editing {
+    outline: 1px solid color-mix(in srgb, var(--role-color) 55%, transparent);
+    outline-offset: -1px;
+}
+
+.custom_preset_preview_card.is_editing .custom_preset_preview_card_edit {
+    opacity: 1;
+    color: #34d399; /* green check = ready to save */
+}
+
+/* Edited badge marker */
+.custom_preset_preview_card.is_edited .custom_preset_preview_badge::after {
+    content: ' ✎';
+    font-size: 0.9em;
+    opacity: 0.75;
+}
+
+/* Editor textarea */
+.custom_preset_preview_card_editor {
+    display: block;
+    width: 100%;
+    min-height: 320px;
+    resize: vertical;
+    font-size: 0.87em;
+    font-family: inherit;
+    line-height: 1.55;
+    padding: 12px 14px;
+    box-sizing: border-box;
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor) 50%, transparent);
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 60%, transparent);
+    color: var(--SmartThemeBodyColor);
+    border-radius: 0 0 11px 11px;
+    outline: none;
+}
