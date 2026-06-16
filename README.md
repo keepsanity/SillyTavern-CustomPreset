@@ -101,3 +101,12 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 | 토글 프리셋 표시 | 토글 프리셋 기능 표시/숨김 |
 | 연결 프리셋 표시 | 채팅방별 프리셋 자동 전환 기능 사용 |
 | 프롬프트 자동 저장 | 프롬프트 수정 저장 시 프리셋 자동 저장 |
+
+
+---
+
+## License
+This project is licensed under the AGPL-3.0 License.
+
+The prompt inspection feature is adapted from
+[SillyTavern/Extension-PromptInspector](https://github.com/SillyTavern/Extension-PromptInspector) (AGPL-3.0).
