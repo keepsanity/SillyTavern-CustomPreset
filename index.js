@@ -2,327 +2,9 @@ import { openai_settings, openai_setting_names, oai_settings, promptManager } fr
 import { uuidv4 } from '../../../utils.js';
 import { extension_settings, saveMetadataDebounced } from '../../../extensions.js';
 import { eventSource, event_types, saveSettingsDebounced, chat_metadata, Generate, main_api, stopGeneration } from '../../../../script.js';
-import { getCurrentLocale } from '../../../i18n.js';
 import { getTokenCountAsync } from '../../../tokenizers.js';
-
-const EXTENSION_NAME = 'SillyTavern-CustomPreset';
-
-const L = (() => {
-    const ko = {
-        quickPromptToggle: '빠른 프롬프트 토글',
-        toggleButtonName: '토글 버튼 이름',
-        checkToShowToggle: '체크 시 빠른 토글 버튼 표시',
-        use: '사용',
-        promptPosition: '프롬프트 위치',
-        promptPositionHint: '선택한 프롬프트 아래에 위치하게 됩니다.',
-        selectPosition: '-- 위치 선택 --',
-        copiedToClipboard: '클립보드에 복사되었습니다.',
-        copyFailed: '복사에 실패했습니다.',
-        promptManagerNotInit: '프롬프트 매니저가 초기화되지 않았습니다.',
-        promptAdded: (name) => `프롬프트 "${name}"이(가) 추가되었습니다.`,
-        selectInsertPosition: '프롬프트 삽입 위치 선택',
-        insertBelowSelected: '선택한 프롬프트 아래에 삽입됩니다.',
-        cancel: '취소',
-        confirm: '확인',
-        expandToggle: '빠른 프롬프트 토글 펼치기',
-        collapseToggle: '빠른 프롬프트 토글 접기',
-        togglePrompt: (name) => `프롬프트 "${name}" 토글`,
-        noPromptsInPreset: '이 프리셋에는 프롬프트가 없습니다.',
-        noSearchResults: '검색 결과가 없습니다.',
-        unlinked: '미연결',
-        unlinkedTitle: 'prompt_order(character_id: 100001)에 연결되지 않은 프롬프트',
-        copyContent: '내용 복사',
-        addToManager: '프롬프트 매니저에 추가',
-        markerNoContent: '(마커 - 내용 없음)',
-        noContent: '(내용 없음)',
-        customPresetManager: '커스텀 프리셋 매니저',
-        showPresetCustomizeBtn: '프리셋 커스텀하기 버튼 표시',
-        showPresetCustomizeBtnNote: '프롬프트 매니저 상단의 "프리셋 커스텀하기" 버튼을 표시/숨김합니다.',
-        showQuickToggle: '빠른 프롬프트 토글 표시',
-        showQuickToggleNote: '프롬프트 편집의 빠른 토글 항목과 인풋 위 토글 버튼을 표시/숨김합니다.',
-        enableCollapseToggle: '빠른 토글 접기기능 활성화',
-        enableCollapseToggleNote: '입력창 상단의 빠른 토글 바 접기/펼치기 버튼을 표시합니다.',
-        enablePositionSelect: '프롬프트 위치 정하기',
-        enablePositionSelectNote: '프롬프트 추가 시 위치를 선택하고, 편집에서 위치를 변경할 수 있습니다.',
-        closePresetCustom: '프리셋 커스텀 닫기',
-        openPresetCustom: '프리셋 커스텀하기',
-        noPresets: '프리셋이 없습니다',
-        selectPreset: '프리셋 선택:',
-        searchPlaceholder: '프롬프트 검색 (이름/role/내용)',
-        search: '검색',
-        reset: '초기화',
-        togglePresetLabel: '토글 프리셋:',
-        togglePresetDefault: '기본',
-        togglePresetNew: '새 토글 프리셋 이름을 입력하세요:',
-        togglePresetRename: '새 이름을 입력하세요:',
-        togglePresetDeleteConfirm: (name) => `토글 프리셋 "${name}"을(를) 삭제하시겠습니까?`,
-        togglePresetCannotDeleteDefault: '기본 토글 프리셋은 삭제/이름변경할 수 없습니다.',
-        togglePresetSaved: (name) => `토글 프리셋 "${name}" 저장됨.`,
-        togglePresetApplied: (name) => `토글 프리셋 "${name}" 적용됨.`,
-        togglePresetCreated: (name) => `토글 프리셋 "${name}" 생성됨.`,
-        togglePresetRenamed: (o, n) => `"${o}" → "${n}" 이름 변경됨.`,
-        togglePresetDeleted: (name) => `토글 프리셋 "${name}" 삭제됨.`,
-        togglePresetNameExists: '같은 이름의 토글 프리셋이 이미 존재합니다.',
-        togglePresetSave: '현재 상태 저장',
-        togglePresetRenameTitle: '토글 프리셋 이름 변경',
-        togglePresetNewTitle: '토글 프리셋 추가',
-        enableTogglePreset: '토글 프리셋 표시',
-        enableTogglePresetNote: '프롬프트 on/off 조합을 저장/전환하는 토글 프리셋 기능을 표시합니다.',
-        enableLinkedPreset: '연결 프리셋 표시',
-        enableLinkedPresetNote: '채팅방별 프리셋 자동 전환 기능을 사용합니다.',
-        linkedPresetManage: '연결 프리셋 관리',
-        linkedPresetTitle: '연결 프리셋 관리',
-        linkedPresetDesc: '이 채팅방에 진입하면 선택한 프리셋으로 자동 전환됩니다.',
-        linkedPresetSelect: '프리셋:',
-        linkedPresetToggleSelect: '토글 프리셋:',
-        linkedPresetNone: '-- 선택 안 함 --',
-        linkedPresetUnlink: '해제',
-        linkedPresetSaved: '연결 프리셋이 저장되었습니다.',
-        linkedPresetUnlinked: '연결 프리셋이 해제되었습니다.',
-        linkedPresetApplied: (name) => `프리셋 "${name}" 자동 적용됨.`,
-        linkedPresetNoChatOpen: '열린 채팅방이 없습니다.',
-        enableAutoSave: '프리셋 자동 저장',
-        enableAutoSaveNote: '프롬프트 수정 저장 시 프리셋도 자동으로 저장합니다.',
-        comparePrompt: '프롬프트 비교',
-        compareTitle: '프롬프트 비교',
-        compareDesc: '위쪽은 선택한 프롬프트(읽기 전용), 아래쪽은 비교 대상 프롬프트(편집 가능)입니다.',
-        compareSelectPrompt: '비교할 프롬프트 선택:',
-        compareSelectPlaceholder: '-- 프롬프트 선택 --',
-        compareSave: '저장',
-        compareSaved: (name) => `프롬프트 "${name}" 저장됨.`,
-        enableAutoConnect: '프롬프트 자동 연결',
-        enableAutoConnectNote: '새 프롬프트 생성 시 prompt_order에 자동으로 연결합니다.',
-        enableTranslate: '번역 기능 사용',
-        enableTranslateNote: '프롬프트 편집창에 번역 버튼을 표시합니다.',
-        translate: '번역',
-        viewTranslation: '번역 보기',
-        deleteTranslation: '번역 삭제',
-        translationDeleted: '번역이 삭제되었습니다.',
-        deleteTranslationConfirm: '저장된 번역을 삭제하시겠습니까?',
-        retranslate: '재번역',
-        translating: '번역 중...',
-        translateNoProfile: '설정에서 번역 프로필을 먼저 선택해주세요.',
-        translateNoConnectionManager: 'Connection Manager가 필요합니다.',
-        translateEmpty: '번역할 내용이 비어있습니다.',
-        translateSuccess: '번역 완료.',
-        translateFailed: (msg) => `번역 실패: ${msg}`,
-        translateModalTitle: '번역 보기',
-        translateOriginal: '원본',
-        translateTranslated: '번역',
-        translationProfile: '번역 프로필',
-        translationProfileNote: '번역에 사용할 Connection Profile을 선택합니다.',
-        translationPromptTemplate: '번역 프롬프트 템플릿',
-        translationPromptTemplateNote: '{content} 자리에 원문이 들어갑니다.',
-        translationDefault: 'Please translate the following text into natural Korean. Output only the translated text without any commentary:\n\n{content}',
-        promptPreview: '프롬프트 미리보기',
-        enablePromptPreview: '프롬프트 미리보기 표시',
-        enablePromptPreviewNote: '실제 전송될 조립된 프롬프트를 카드 형태로 미리 볼 수 있는 메뉴를 표시합니다.',
-        promptPreviewTitle: '프롬프트 미리보기',
-        promptPreviewBuilding: '프롬프트 조립 중...',
-        promptPreviewFailed: '프롬프트를 가져오지 못했습니다.',
-        promptPreviewNeedChat: '캐릭터와 채팅방을 연 상태에서 시도해주세요.',
-        promptPreviewEmpty: '표시할 프롬프트가 없습니다.',
-        promptPreviewSearchPlaceholder: '내용 검색...',
-        promptPreviewMessages: (n) => `메시지 ${n}개`,
-        promptPreviewChars: (n) => `${n.toLocaleString()}자`,
-        promptPreviewNoResults: '검색 결과가 없습니다.',
-        promptPreviewExpandAll: '모두 펼치기',
-        promptPreviewCollapseAll: '모두 접기',
-        promptPreviewCopyAll: '전체 복사',
-        promptPreviewClose: '닫기',
-        promptPreviewCopyCard: '이 메시지 복사',
-        promptPreviewRawText: '원문 보기',
-        promptPreviewTokens: (n) => `${n.toLocaleString()}토큰`,
-        promptPreviewTokensCalc: '토큰 계산 중...',
-        promptPreviewToggleRaw: '카드 / 원본(JSON) 전환',
-        promptPreviewViewCards: '카드 보기',
-        promptPreviewViewRaw: '원본 보기',
-        promptPreviewModeDry: '조립',
-        promptPreviewModeLive: '실전',
-        promptPreviewModeDryHint: '전송 없이 조립한 프롬프트 · 인터셉터(RAG 등) 주입 제외',
-        promptPreviewModeLiveHint: '실제 전송된 프롬프트 · 인터셉터 주입 포함',
-        promptPreviewLiveArmed: '실전 캡처 대기 중 — 평소처럼 메시지를 보내면 표시됩니다. (메뉴를 다시 누르면 취소)',
-        promptPreviewLiveCancelled: '실전 캡처가 취소되었습니다.',
-        promptPreviewLiveCaptured: '실전 프롬프트를 캡처했습니다.',
-        promptPreviewArmTitle: '클릭 시 다음 전송을 캡처',
-        promptInterceptOn: '프롬프트 미리보기',
-        promptInterceptOff: '미리보기 끄기',
-        promptInterceptOnToast: '미리보기 켜짐 — 매 전송 직전 프롬프트를 표시합니다.',
-        promptInterceptOffToast: '미리보기 꺼짐.',
-        promptInterceptMenuTitle: '켜면 매 전송 직전 실제 프롬프트를 표시 (인터셉터 포함)',
-        promptPreviewContinue: '전송 계속',
-        promptPreviewCancelGen: '생성 취소',
-        promptPreviewGenCancelled: '생성을 취소했습니다.',
-        promptPreviewModeIntercept: '인터셉트',
-    };
-    const en = {
-        quickPromptToggle: 'Quick Prompt Toggle',
-        toggleButtonName: 'Toggle button name',
-        checkToShowToggle: 'Check to show quick toggle button',
-        use: 'Use',
-        promptPosition: 'Prompt Position',
-        promptPositionHint: 'Will be placed below the selected prompt.',
-        selectPosition: '-- Select position --',
-        copiedToClipboard: 'Copied to clipboard.',
-        copyFailed: 'Failed to copy.',
-        promptManagerNotInit: 'Prompt manager is not initialized.',
-        promptAdded: (name) => `Prompt "${name}" has been added.`,
-        selectInsertPosition: 'Select Insert Position',
-        insertBelowSelected: 'Will be inserted below the selected prompt.',
-        cancel: 'Cancel',
-        confirm: 'Confirm',
-        expandToggle: 'Expand quick prompt toggle',
-        collapseToggle: 'Collapse quick prompt toggle',
-        togglePrompt: (name) => `Toggle prompt "${name}"`,
-        noPromptsInPreset: 'No prompts in this preset.',
-        noSearchResults: 'No search results.',
-        unlinked: 'Unlinked',
-        unlinkedTitle: 'Prompt not linked to prompt_order (character_id: 100001)',
-        copyContent: 'Copy content',
-        addToManager: 'Add to prompt manager',
-        markerNoContent: '(Marker - no content)',
-        noContent: '(No content)',
-        customPresetManager: 'Custom Preset Manager',
-        showPresetCustomizeBtn: 'Show Preset Customize Button',
-        showPresetCustomizeBtnNote: 'Shows/hides the "Customize Preset" button at the top of the prompt manager.',
-        showQuickToggle: 'Show Quick Prompt Toggle',
-        showQuickToggleNote: 'Shows/hides the quick toggle in prompt editor and toggle buttons above input.',
-        enableCollapseToggle: 'Enable Collapse Toggle',
-        enableCollapseToggleNote: 'Shows the collapse/expand button for the quick toggle bar above the input.',
-        enablePositionSelect: 'Enable Position Select',
-        enablePositionSelectNote: 'Select position when adding prompts, and change position in the editor.',
-        closePresetCustom: 'Close Preset Customizer',
-        openPresetCustom: 'Customize Preset',
-        noPresets: 'No presets available',
-        selectPreset: 'Select preset:',
-        searchPlaceholder: 'Search prompts (name/role/content)',
-        search: 'Search',
-        reset: 'Reset',
-        togglePresetLabel: 'Toggle Preset:',
-        togglePresetDefault: 'Default',
-        togglePresetNew: 'Enter a name for the new toggle preset:',
-        togglePresetRename: 'Enter a new name:',
-        togglePresetDeleteConfirm: (name) => `Delete toggle preset "${name}"?`,
-        togglePresetCannotDeleteDefault: 'Cannot delete/rename the default toggle preset.',
-        togglePresetSaved: (name) => `Toggle preset "${name}" saved.`,
-        togglePresetApplied: (name) => `Toggle preset "${name}" applied.`,
-        togglePresetCreated: (name) => `Toggle preset "${name}" created.`,
-        togglePresetRenamed: (o, n) => `"${o}" renamed to "${n}".`,
-        togglePresetDeleted: (name) => `Toggle preset "${name}" deleted.`,
-        togglePresetNameExists: 'A toggle preset with this name already exists.',
-        togglePresetSave: 'Save current state',
-        togglePresetRenameTitle: 'Rename toggle preset',
-        togglePresetNewTitle: 'Add toggle preset',
-        enableTogglePreset: 'Show Toggle Preset',
-        enableTogglePresetNote: 'Shows the toggle preset feature to save/switch prompt on/off combinations.',
-        enableLinkedPreset: 'Show Linked Preset',
-        enableLinkedPresetNote: 'Enables per-chat automatic preset switching.',
-        linkedPresetManage: 'Linked Preset Manager',
-        linkedPresetTitle: 'Linked Preset Manager',
-        linkedPresetDesc: 'Automatically switches to the selected preset when entering this chat.',
-        linkedPresetSelect: 'Preset:',
-        linkedPresetToggleSelect: 'Toggle Preset:',
-        linkedPresetNone: '-- None --',
-        linkedPresetUnlink: 'Unlink',
-        linkedPresetSaved: 'Linked preset saved.',
-        linkedPresetUnlinked: 'Linked preset unlinked.',
-        linkedPresetApplied: (name) => `Preset "${name}" auto-applied.`,
-        linkedPresetNoChatOpen: 'No chat is open.',
-        enableAutoSave: 'Auto-save Preset',
-        enableAutoSaveNote: 'Automatically saves the preset when saving a prompt edit.',
-        comparePrompt: 'Compare prompt',
-        compareTitle: 'Compare Prompts',
-        compareDesc: 'Top is the selected prompt (read-only). Bottom is the comparison prompt (editable).',
-        compareSelectPrompt: 'Select prompt to compare:',
-        compareSelectPlaceholder: '-- Select prompt --',
-        compareSave: 'Save',
-        compareSaved: (name) => `Prompt "${name}" saved.`,
-        enableAutoConnect: 'Auto-connect Prompts',
-        enableAutoConnectNote: 'Automatically links new prompts to prompt_order on creation.',
-        enableTranslate: 'Enable Translate',
-        enableTranslateNote: 'Shows the translate button in the prompt editor.',
-        translate: 'Translate',
-        viewTranslation: 'View Translation',
-        deleteTranslation: 'Delete Translation',
-        translationDeleted: 'Translation deleted.',
-        deleteTranslationConfirm: 'Delete the saved translation?',
-        retranslate: 'Re-translate',
-        translating: 'Translating...',
-        translateNoProfile: 'Please select a translation profile in settings first.',
-        translateNoConnectionManager: 'Connection Manager is required.',
-        translateEmpty: 'Nothing to translate.',
-        translateSuccess: 'Translation completed.',
-        translateFailed: (msg) => `Translation failed: ${msg}`,
-        translateModalTitle: 'Translation',
-        translateOriginal: 'Original',
-        translateTranslated: 'Translated',
-        translationProfile: 'Translation Profile',
-        translationProfileNote: 'Select the Connection Profile to use for translation.',
-        translationPromptTemplate: 'Translation Prompt Template',
-        translationPromptTemplateNote: '{content} will be replaced with the original text.',
-        translationDefault: 'Translate the following text to English naturally. Output only the translation without any commentary:\n\n{content}',
-        promptPreview: 'Prompt Preview',
-        enablePromptPreview: 'Show Prompt Preview',
-        enablePromptPreviewNote: 'Adds a menu to preview the fully assembled prompt that will be sent, shown as cards.',
-        promptPreviewTitle: 'Prompt Preview',
-        promptPreviewBuilding: 'Building prompt...',
-        promptPreviewFailed: 'Failed to build the prompt.',
-        promptPreviewNeedChat: 'Please open a character and a chat first.',
-        promptPreviewEmpty: 'No prompt to display.',
-        promptPreviewSearchPlaceholder: 'Search content...',
-        promptPreviewMessages: (n) => `${n} message${n === 1 ? '' : 's'}`,
-        promptPreviewChars: (n) => `${n.toLocaleString()} chars`,
-        promptPreviewNoResults: 'No matching messages.',
-        promptPreviewExpandAll: 'Expand all',
-        promptPreviewCollapseAll: 'Collapse all',
-        promptPreviewCopyAll: 'Copy all',
-        promptPreviewClose: 'Close',
-        promptPreviewCopyCard: 'Copy this message',
-        promptPreviewRawText: 'View raw',
-        promptPreviewTokens: (n) => `${n.toLocaleString()} tokens`,
-        promptPreviewTokensCalc: 'Counting tokens...',
-        promptPreviewToggleRaw: 'Toggle cards / raw (JSON)',
-        promptPreviewViewCards: 'Cards',
-        promptPreviewViewRaw: 'Raw',
-        promptPreviewModeDry: 'Assembled',
-        promptPreviewModeLive: 'Live',
-        promptPreviewModeDryHint: 'Assembled without sending · excludes interceptor (RAG, etc.) injections',
-        promptPreviewModeLiveHint: 'The actually sent prompt · includes interceptor injections',
-        promptPreviewLiveArmed: 'Waiting to capture — send a message as usual and it will show up. (Click the menu again to cancel)',
-        promptPreviewLiveCancelled: 'Live capture cancelled.',
-        promptPreviewLiveCaptured: 'Captured the live prompt.',
-        promptPreviewArmTitle: 'Click to capture the next send',
-        promptInterceptOn: 'Prompt Preview',
-        promptInterceptOff: 'Stop Preview',
-        promptInterceptOnToast: 'Preview ON — the prompt will be shown before every send.',
-        promptInterceptOffToast: 'Preview OFF.',
-        promptInterceptMenuTitle: 'When on, shows the real prompt before every send (includes interceptors)',
-        promptPreviewContinue: 'Continue send',
-        promptPreviewCancelGen: 'Cancel generation',
-        promptPreviewGenCancelled: 'Generation cancelled.',
-        promptPreviewModeIntercept: 'Intercept',
-    };
-    const locale = (getCurrentLocale() || '').toLowerCase();
-    return locale.startsWith('ko') ? ko : en;
-})();
-const QUICK_TOGGLE_NAME_KEY = 'quick_prompt_toggle_name';
-const QUICK_TOGGLE_ENABLED_KEY = 'quick_prompt_toggle_enabled';
-const FEATURE_DEFAULTS = {
-    showPresetCustomizerButton: true,
-    showQuickPromptToggleFeature: true,
-    showQuickPromptToggleCollapseFeature: true,
-    quickPromptToggleBarCollapsed: false,
-    showPromptPositionFeature: true,
-    showTogglePresetFeature: true,
-    showLinkedPresetFeature: true,
-    autoSavePreset: false,
-    autoConnectPrompt: true,
-    showTranslateFeature: false,
-    showPromptPreviewFeature: true,
-    translationProfileId: '',
-    translationPromptTemplate: '',
-    translations: {},
-};
+import { L } from './translations.js';
+import { EXTENSION_NAME, GLOBAL_PROMPT_CHARACTER_ID, QUICK_TOGGLE_NAME_KEY, QUICK_TOGGLE_ENABLED_KEY, FEATURE_DEFAULTS } from './constants.js';
 
 let isPanelOpen = false;
 let quickPopupObserver = null;
@@ -421,7 +103,7 @@ function setActiveTogglePresetName(presetName, togglePresetName) {
 function captureCurrentToggleState() {
     const serviceSettings = promptManager?.serviceSettings;
     if (!serviceSettings?.prompt_order) return {};
-    const entry = serviceSettings.prompt_order.find(e => e.character_id === 100001);
+    const entry = serviceSettings.prompt_order.find(e => e.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     if (!entry?.order) return {};
     const state = {};
     for (const item of entry.order) {
@@ -433,7 +115,7 @@ function captureCurrentToggleState() {
 function applyTogglePresetSnapshot(snapshot) {
     const serviceSettings = promptManager?.serviceSettings;
     if (!serviceSettings?.prompt_order) return;
-    const entry = serviceSettings.prompt_order.find(e => e.character_id === 100001);
+    const entry = serviceSettings.prompt_order.find(e => e.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     if (!entry?.order) return;
     let changed = false;
     for (const item of entry.order) {
@@ -450,6 +132,20 @@ function applyTogglePresetSnapshot(snapshot) {
         promptManager.render();
     }
     renderQuickToggleButtons();
+}
+
+// ST가 프리셋을 (재)적용하면 prompt_order를 프리셋 원본 on/off로 덮어쓴다.
+// 활성 토글 프리셋이 default가 아니면 그 스냅샷을 다시 씌워 리셋을 막는다.
+// (default = "프리셋 원본 그대로" 이므로 건너뜀 → 토글 프리셋 안 쓰는 사용자는 영향 없음)
+function reapplyActiveTogglePreset(presetName) {
+    if (!presetName) return;
+    if (getFeatureSettings().showTogglePresetFeature === false) return;
+    const active = getActiveTogglePresetName(presetName);
+    if (active === 'default') return;
+    const presets = getTogglePresetsForPreset(presetName);
+    if (presets[active]) {
+        applyTogglePresetSnapshot(presets[active]);
+    }
 }
 
 // ========== Toggle Preset CRUD ==========
@@ -822,7 +518,7 @@ function loadPositionSelectForPrompt(promptId) {
         return;
     }
 
-    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === 100001);
+    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     if (!promptOrderEntry?.order) {
         select.disabled = true;
         return;
@@ -1007,7 +703,7 @@ function addPromptToManagerAtPosition(prompt, afterIdentifier) {
     promptManager.addPrompt(newPrompt, newIdentifier);
 
     const preset = getActivePromptManagerPreset();
-    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === 100001);
+    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
 
     if (promptOrderEntry?.order && afterIdentifier) {
         const afterIndex = promptOrderEntry.order.findIndex(item => item.identifier === afterIdentifier);
@@ -1149,7 +845,7 @@ function getOrderedPrompts(preset) {
     if (!preset || !preset.prompts) return [];
 
     // Find prompt_order for the global/dummy character (100001)
-    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === 100001);
+    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     const validPrompts = preset.prompts.filter(p => p && p.name);
     const promptMap = new Map(validPrompts.map(prompt => [prompt.identifier, prompt]));
     const linkedIdentifiers = new Set();
@@ -1190,7 +886,7 @@ function getLinkedQuickTogglePrompts(preset) {
 }
 
 function togglePromptEnabledByIdentifier(preset, identifier) {
-    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === 100001);
+    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     if (!promptOrderEntry?.order) return;
     const target = promptOrderEntry.order.find(item => item.identifier === identifier);
     if (!target) return;
@@ -1203,7 +899,7 @@ function movePromptToPosition(promptId, afterIdentifier) {
     const preset = getActivePromptManagerPreset();
     if (!preset) return;
 
-    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === 100001);
+    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     if (!promptOrderEntry?.order) return;
 
     const currentIndex = promptOrderEntry.order.findIndex(item => item.identifier === promptId);
@@ -3516,10 +3212,14 @@ async function init() {
     applyFeatureVisibility();
     renderQuickToggleButtons();
     populateTogglePresetSelect(getActivePresetName());
+    // 재시작 시 커넥션/프리셋 재적용으로 토글이 프리셋 원본으로 덮여쓰이는 경우 대비
+    reapplyActiveTogglePreset(getActivePresetName());
 
     eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
         if (isPanelOpen) populatePresetSelect();
-        populateTogglePresetSelect(getActivePresetName());
+        const presetName = getActivePresetName();
+        populateTogglePresetSelect(presetName);
+        reapplyActiveTogglePreset(presetName);
         renderQuickToggleButtons();
     });
 
