@@ -875,22 +875,43 @@ function getOrderedPrompts(preset) {
     return validPrompts.map(prompt => ({ prompt, isLinked: false, isEnabled: false }));
 }
 
-function getLinkedQuickTogglePrompts(preset) {
+function getLinkedQuickToggleGroups(preset) {
     if (!preset) return [];
-    return getOrderedPrompts(preset)
+    const entries = getOrderedPrompts(preset)
         .filter(({ prompt, isLinked }) =>
             isLinked &&
             !!prompt[QUICK_TOGGLE_ENABLED_KEY] &&
             !!String(prompt[QUICK_TOGGLE_NAME_KEY] || '').trim(),
         );
+
+    // 같은 토글 버튼 이름을 가진 프롬프트끼리 하나의 그룹으로 묶는다 (첫 등장 순서를 유지).
+    const groups = new Map();
+    for (const { prompt, isEnabled } of entries) {
+        const name = String(prompt[QUICK_TOGGLE_NAME_KEY]).trim();
+        if (!groups.has(name)) {
+            groups.set(name, { name, prompts: [], identifiers: [], anyEnabled: false });
+        }
+        const group = groups.get(name);
+        group.prompts.push(prompt);
+        group.identifiers.push(prompt.identifier);
+        if (isEnabled) group.anyEnabled = true;
+    }
+
+    return Array.from(groups.values());
 }
 
-function togglePromptEnabledByIdentifier(preset, identifier) {
+function toggleQuickToggleGroup(preset, identifiers) {
     const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
     if (!promptOrderEntry?.order) return;
-    const target = promptOrderEntry.order.find(item => item.identifier === identifier);
-    if (!target) return;
-    target.enabled = !target.enabled;
+
+    const targets = promptOrderEntry.order.filter(item => identifiers.includes(item.identifier));
+    if (targets.length === 0) return;
+
+    // 하나라도 켜져 있으면 전부 끄고, 전부 꺼져 있을 때만 전부 켠다.
+    const anyEnabled = targets.some(item => !!item.enabled);
+    const nextEnabled = !anyEnabled;
+    targets.forEach(item => { item.enabled = nextEnabled; });
+
     promptManager?.saveServiceSettings?.();
     promptManager?.render?.();
 }
@@ -986,8 +1007,8 @@ function renderQuickToggleButtons() {
     }
 
     const preset = getActivePromptManagerPreset();
-    const quickPrompts = getLinkedQuickTogglePrompts(preset);
-    if (quickPrompts.length === 0) {
+    const quickToggleGroups = getLinkedQuickToggleGroups(preset);
+    if (quickToggleGroups.length === 0) {
         updateQuickToggleCollapseButtonState(false);
         return;
     }
@@ -1000,14 +1021,14 @@ function renderQuickToggleButtons() {
         ? 'custom_preset_quick_toggle_bar-collapsed'
         : 'custom_preset_quick_toggle_bar-expanded'}`;
 
-    quickPrompts.forEach(({ prompt, isEnabled }) => {
+    quickToggleGroups.forEach(({ name, prompts, identifiers, anyEnabled }) => {
         const button = document.createElement('button');
         button.className = 'menu_button custom_preset_quick_toggle_button';
-        if (!isEnabled) button.classList.add('is_disabled');
-        button.textContent = String(prompt[QUICK_TOGGLE_NAME_KEY]).trim();
-        button.title = L.togglePrompt(prompt.name);
+        if (!anyEnabled) button.classList.add('is_disabled');
+        button.textContent = name;
+        button.title = L.togglePrompt(prompts.map(p => p.name).join(', '));
         button.addEventListener('click', () => {
-            togglePromptEnabledByIdentifier(getActivePromptManagerPreset(), prompt.identifier);
+            toggleQuickToggleGroup(getActivePromptManagerPreset(), identifiers);
             renderQuickToggleButtons();
         });
         bar.appendChild(button);
