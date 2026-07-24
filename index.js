@@ -1420,7 +1420,7 @@ function showQuickToggleGroupModal() {
     const setBtn = document.createElement('button');
     setBtn.type = 'button';
     setBtn.className = 'menu_button';
-    setBtn.innerHTML = '<i class="fa-solid fa-object-group"></i>';
+    setBtn.innerHTML = '<i class="fa-solid fa-tag"></i>';
     setBtn.title = L.toggleGroupSetTitle;
     setBtn.addEventListener('click', (e) => {
         e.stopPropagation();
