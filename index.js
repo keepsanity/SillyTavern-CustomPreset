@@ -941,7 +941,7 @@ function getPromptQuickToggleNames(prompt) {
 }
 
 /**
- * 그룹 이름을 배타 세트와 표시용 이름으로 나눈다.
+ * 그룹 이름을 태그와 표시용 이름으로 나눈다.
  * "강도::약" → { setName: '강도', label: '약' }
  * "약"          → { setName: '', label: '약' }
  * @param {string} fullName
@@ -954,7 +954,7 @@ function parseGroupKey(fullName) {
 
     const setName = raw.slice(0, index).trim();
     const label = raw.slice(index + QUICK_TOGGLE_SET_SEPARATOR.length).trim();
-    // 어느 한쪽이 비면 세트로 보지 않고 이름 그대로 쓴다.
+    // 어느 한쪽이 비면 태그로 보지 않고 이름 그대로 쓴다.
     if (!setName || !label) return { setName: '', label: raw.trim() };
     return { setName, label };
 }
@@ -1005,7 +1005,7 @@ function getLinkedQuickToggleGroups(preset) {
  * 그룹끼리 프롬프트를 공유할 때, 한 그룹을 껐다고 다른 켜진 그룹까지 무너지는 것을 막는다.
  * @param {object} group - 지금 조작 중인 그룹
  * @param {object[]} allGroups
- * @param {boolean} ignoreSameSet - 배타 세트 전환 중이면 같은 세트는 보호하지 않는다 (끄는 게 목적이므로)
+ * @param {boolean} ignoreSameSet - 같은 태그끼리 전환하는 중이면 같은 태그 그룹은 보호하지 않는다 (끄는 게 목적이므로)
  * @returns {{held: Set<string>, holders: string[]}} 보호할 identifier와 그 이유가 된 그룹 이름
  */
 function getHeldIdentifiers(group, allGroups, ignoreSameSet = false) {
@@ -1032,7 +1032,7 @@ function getHeldIdentifiers(group, allGroups, ignoreSameSet = false) {
  * 그룹 버튼을 눌렀을 때의 on/off 처리
  * @param {object} preset
  * @param {object} group - getLinkedQuickToggleGroups()가 만든 그룹
- * @param {object[]} allGroups - 공유 프롬프트/배타 세트 처리를 위한 전체 그룹 목록
+ * @param {object[]} allGroups - 공유 프롬프트/태그 처리를 위한 전체 그룹 목록
  */
 function toggleQuickToggleGroup(preset, group, allGroups = []) {
     const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
@@ -1059,7 +1059,7 @@ function toggleQuickToggleGroup(preset, group, allGroups = []) {
         turnOff.forEach(item => { item.enabled = false; });
     } else {
         if (group.setName) {
-            // 배타 세트: 같은 세트의 다른 그룹은 끈다.
+            // 같은 태그를 가진 다른 그룹은 끈다.
             // 단, 이 그룹과 공유하는 프롬프트와, 세트 밖에서 켜져 있는 그룹이 쓰는 프롬프트는 남긴다.
             const { held } = getHeldIdentifiers(group, allGroups, true);
             const turnOff = new Set();
@@ -1145,7 +1145,7 @@ function saveActivePreset() {
 }
 
 /**
- * 그룹 이름/세트 이름에 쓸 수 없는 문자 검사.
+ * 그룹 이름/태그 이름에 쓸 수 없는 문자 검사.
  * 쉼표는 그룹 구분자, "::"는 세트 구분자라 이름 안에 들어갈 수 없다.
  * @returns {boolean} 사용 가능하면 true
  */
@@ -1430,7 +1430,7 @@ function showQuickToggleGroupModal() {
         const answer = prompt(L.toggleGroupSetPrompt, setName);
         if (answer === null) return;
 
-        // 빈 값으로 두면 배타 세트에서 빼낸다.
+        // 빈 값으로 두면 태그를 떼어낸다.
         const nextSet = answer.trim();
         if (nextSet && !isValidGroupNamePart(nextSet)) return;
 
@@ -1675,7 +1675,7 @@ function renderQuickToggleButtons() {
         button.className = 'menu_button custom_preset_quick_toggle_button';
         if (state === 'off') button.classList.add('is_disabled');
         if (state === 'partial') button.classList.add('is_partial');
-        // 배타 세트에 속하면 세트 이름은 빼고 표시한다. ("강도::약" → "약")
+        // 태그가 붙어 있으면 태그는 빼고 표시한다. ("강도::약" → "약")
         button.textContent = label;
 
         const memberNames = prompts.map(p => p.name).join(', ');

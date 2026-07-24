@@ -16,6 +16,18 @@ A SillyTavern extension for managing and customizing prompt presets.
 - Toggle buttons appear above the input area for fast access
 - Collapsible toggle bar to save screen space
 
+### Toggle Group (advanced — enable it in settings)
+- Bundle several prompts under one button — clicking it turns them all on or off
+- A prompt can belong to multiple groups (e.g. shared prompts 1 & 2 in *Low* / *Mid* / *High*)
+- Manage groups visually: create a group, then pick its prompts with checkboxes
+- Buttons show three states: **on** (all members enabled), **partial** (dashed — only some enabled), **off**
+- Optional **tag**: buttons sharing a tag behave like radio buttons. Switching from *Low* to *Mid*
+  turns off only what is not shared, so shared prompts stay on. The tag is not shown on the button
+- Groups may share prompts — turning one group off never breaks another group that is still on
+- Group configuration is stored inside the preset, so it travels with an exported/shared preset
+- Advanced: the toggle name field accepts `Low, Mid, High` (comma = multiple groups) and
+  `tag::name` (e.g. `level::Low`)
+
 ### Prompt Position
 - Choose where to insert a prompt when adding it via the "+" button
 - Change prompt position in the prompt editor (applied on save)
@@ -44,6 +56,7 @@ All features can be toggled in **Extensions > Custom Preset Manager**:
 | Show Preset Customize Button | Show/hide the "Customize Preset" button in the prompt manager |
 | Show Quick Prompt Toggle | Show/hide toggle buttons in the editor and above the input |
 | Enable Collapse Toggle | Show/hide the collapse button for the toggle bar |
+| Toggle Group (advanced) | Show the "Manage Groups" feature (off by default). Existing group buttons work either way |
 | Enable Position Select | Enable position selection when adding/editing prompts |
 | Show Toggle Preset | Show/hide the toggle preset feature |
 | Show Linked Preset | Enable per-chat automatic preset switching |
@@ -68,6 +81,17 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 - 개별 프롬프트에 토글 버튼을 지정하여 빠르게 켜고 끌 수 있음
 - 입력창 위에 토글 버튼 표시
 - 토글 바 접기/펼치기 지원
+
+### 토글 그룹 (고급 — 설정에서 켜야 보임)
+- 여러 프롬프트를 버튼 하나로 묶어서 한 번에 켜고 끔
+- 한 프롬프트가 여러 그룹에 동시에 소속 가능 (예: 공용 프롬프트 1·2번을 *약*/*중*/*강* 세 그룹에 모두)
+- "그룹 관리" 창에서 그룹을 만들고 넣을 프롬프트를 체크박스로 선택
+- 버튼은 3가지 상태로 표시: **켜짐**(멤버 전부 on), **일부 켜짐**(점선 — 공용만 켜진 경우), **꺼짐**
+- **태그**(선택): 같은 태그를 가진 버튼끼리는 하나만 켜짐. *약* → *중* 전환 시 공용이 아닌 프롬프트만
+  꺼지므로 공용 프롬프트는 켜진 채로 유지되고 한 번의 클릭으로 버전이 바뀜. 태그는 버튼에 표시되지 않음
+- 그룹끼리 프롬프트를 공유해도, 한 그룹을 꺼서 아직 켜져 있는 다른 그룹이 무너지지 않음
+- 그룹 구성은 프리셋 안에 저장되므로 프리셋을 공유하면 그룹도 그대로 따라감
+- 직접 입력: 토글 이름 칸에 `약, 중, 강`처럼 쉼표로 여러 그룹 지정, `태그::이름`(예: `강도::약`)으로 지정
 
 ### 프롬프트 위치 지정
 - "+" 버튼으로 프롬프트 추가 시 삽입 위치 선택 가능
@@ -97,6 +121,7 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 | 프리셋 커스텀하기 버튼 표시 | 프롬프트 매니저 상단의 버튼 표시/숨김 |
 | 빠른 프롬프트 토글 표시 | 편집의 토글 항목과 입력창 위 토글 버튼 표시/숨김 |
 | 빠른 토글 접기기능 활성화 | 토글 바 접기/펼치기 버튼 표시 |
+| 토글 그룹 기능 (고급) | "그룹 관리" 기능 표시 (기본 꺼짐). 꺼도 이미 만든 그룹 버튼은 동작 |
 | 프롬프트 위치 정하기 | 프롬프트 추가/편집 시 위치 선택 기능 활성화 |
 | 토글 프리셋 표시 | 토글 프리셋 기능 표시/숨김 |
 | 연결 프리셋 표시 | 채팅방별 프리셋 자동 전환 기능 사용 |

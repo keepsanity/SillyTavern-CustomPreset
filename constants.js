@@ -11,7 +11,7 @@ export const QUICK_TOGGLE_ENABLED_KEY = 'quick_prompt_toggle_enabled';
 // 한 프롬프트를 여러 그룹에 동시에 넣기 위한 구분자.
 export const QUICK_TOGGLE_GROUP_SEPARATOR = ',';
 
-// 그룹 이름을 "세트::이름"으로 적으면 같은 세트의 그룹끼리는 하나만 켜진다. ("강도::약")
+// 그룹 이름을 "태그::이름"으로 적으면 같은 태그를 가진 그룹끼리는 하나만 켜진다. ("강도::약")
 // 기존 이름과 충돌할 가능성이 거의 없는 구분자를 쓴다.
 export const QUICK_TOGGLE_SET_SEPARATOR = '::';
 
