@@ -238,6 +238,13 @@
     filter: grayscale(0.7);
 }
 
+/* 그룹 멤버 중 일부만 켜진 상태 (공용 프롬프트만 켜진 경우 등) */
+.custom_preset_quick_toggle_button.is_partial {
+    opacity: 0.75;
+    border-style: dashed;
+    filter: grayscale(0.35);
+}
+
 /* Position Select Modal */
 .custom_preset_position_modal_overlay {
     position: fixed;
@@ -282,6 +289,175 @@
 #custom_preset_toggle_preset_section {
     margin-top: 15px;
     margin-bottom: 10px;
+}
+
+/* Toggle Group Section - 라벨 + 버튼을 한 줄에 */
+#custom_preset_toggle_group_section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.custom_preset_toggle_group_label {
+    flex-shrink: 0;
+    margin: 0;
+}
+
+#custom_preset_toggle_group_manage_btn {
+    flex-direction: row;
+    white-space: nowrap;
+    width: auto;
+    gap: 6px;
+    margin: 0;
+}
+
+/* Toggle Group Manager Modal */
+.custom_preset_group_modal {
+    max-width: 720px;
+    width: calc(100% - 20px);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.custom_preset_group_body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    min-height: 0;
+    flex: 1;
+}
+
+.custom_preset_group_pane {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 200px;
+    flex: 1;
+    min-height: 0;
+}
+
+.custom_preset_group_pane_label {
+    font-weight: bold;
+    opacity: 0.85;
+}
+
+.custom_preset_group_list,
+.custom_preset_group_member_list {
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    padding: 5px;
+    max-height: 40vh;
+    min-height: 120px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.custom_preset_group_row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.custom_preset_group_row:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.custom_preset_group_row.selected {
+    background-color: rgba(255, 255, 255, 0.14);
+    outline: 1px solid var(--SmartThemeBorderColor);
+}
+
+.custom_preset_group_row_name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom_preset_group_row_count {
+    flex-shrink: 0;
+    opacity: 0.6;
+    font-size: 0.85em;
+}
+
+/* 배타 세트 뱃지 */
+.custom_preset_group_row_set {
+    flex-shrink: 0;
+    font-size: 0.75em;
+    opacity: 0.7;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    padding: 1px 5px;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom_preset_group_actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.custom_preset_group_actions .menu_button {
+    flex-direction: row;
+    white-space: nowrap;
+    width: auto;
+    gap: 5px;
+}
+
+.custom_preset_group_member {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.custom_preset_group_member:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.custom_preset_group_member_name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom_preset_group_member_others {
+    flex-shrink: 0;
+    font-size: 0.75em;
+    opacity: 0.6;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px;
+    padding: 1px 5px;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom_preset_group_footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.custom_preset_group_footer .menu_button {
+    flex-direction: row;
+    white-space: nowrap;
+    width: auto;
 }
 
 .custom_preset_toggle_preset_row {
