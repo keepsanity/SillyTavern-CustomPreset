@@ -15,6 +15,10 @@ export const QUICK_TOGGLE_GROUP_SEPARATOR = ',';
 // 기존 이름과 충돌할 가능성이 거의 없는 구분자를 쓴다.
 export const QUICK_TOGGLE_SET_SEPARATOR = '::';
 
+// 프롬프트 담기(캡처)에서 이름 → 매크로 치환 대상.
+// 1글자 이름은 본문 아무 데나 걸려서 오탐이 심하므로 건너뛴다.
+export const CAPTURE_MIN_NAME_LENGTH = 2;
+
 export const FEATURE_DEFAULTS = {
     showPresetCustomizerButton: true,
     showQuickPromptToggleFeature: true,
@@ -29,6 +33,12 @@ export const FEATURE_DEFAULTS = {
     autoConnectPrompt: true,
     showTranslateFeature: false,
     showPromptPreviewFeature: true,
+    // 채팅에서 텍스트를 집어 프리셋 프롬프트로 담는 기능 (기본 꺼짐)
+    showPromptCaptureFeature: false,
+    promptCaptureFromCodeBlock: true,
+    promptCaptureFromSelection: true,
+    // 캡처 창을 열 때 {{user}}/{{char}} 치환 체크박스의 초기 상태
+    promptCaptureMacroDefault: true,
     translationProfileId: '',
     translationPromptTemplate: '',
     translations: {},

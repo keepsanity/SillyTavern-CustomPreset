@@ -47,6 +47,18 @@ A SillyTavern extension for managing and customizing prompt presets.
 - Automatically saves the preset when saving a prompt edit
 - No need to manually click the save button at the top
 
+### Capture Prompts from Chat (off by default)
+- A capture button next to the copy button on every code block in a chat message
+- Select text inside a chat message and a floating capture button appears at the right edge of the screen,
+  level with the start of the selection — clear of the OS copy/paste callout and of other extensions'
+  selection buttons, which sit near the selection's centre and end
+- Both open a small menu: **append to an existing prompt**, **replace an existing prompt**, **add as a new prompt**
+- When appending, choose the spot: below, above, or **at the cursor** — the target prompt's content is shown
+  in an editable box, so you click where it should go (and can fix the existing text while you are there)
+- The capture dialog can convert the persona and character names into `{{user}}` / `{{char}}`
+  (group chats convert every member to `{{char}}`). The checkbox is per-capture and the text stays editable
+- Names shorter than 2 characters are skipped — they match too much text to be safe
+
 ## Settings
 
 All features can be toggled in **Extensions > Custom Preset Manager**:
@@ -61,6 +73,7 @@ All features can be toggled in **Extensions > Custom Preset Manager**:
 | Show Toggle Preset | Show/hide the toggle preset feature |
 | Show Linked Preset | Enable per-chat automatic preset switching |
 | Auto-save Preset | Automatically save the preset when saving a prompt edit |
+| Capture Prompts from Chat | Capture code blocks / selected text from chat into a preset prompt (off by default) |
 
 ---
 
@@ -112,6 +125,17 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 - 프롬프트 수정 저장 시 프리셋도 자동으로 저장
 - 상단 저장 버튼을 따로 누를 필요 없음
 
+### 채팅에서 프롬프트 담기 (기본 꺼짐)
+- 채팅 메시지 코드블럭의 복사 버튼 옆에 담기 버튼 추가
+- 채팅 메시지 안에서 텍스트를 드래그하면 **화면 오른쪽 끝, 선택이 시작되는 줄 높이**에 담기 버튼이 뜸.
+  OS 복사·붙여넣기 메뉴(선택 영역 가로 중앙)와도, 다른 확장의 선택 버튼(선택 끝 근처)과도 자리가 갈림
+- 둘 다 누르면 메뉴 세 개: **기존 프롬프트에 추가**, **기존 프롬프트 대체**, **새 프롬프트로 추가**
+- 추가할 때 붙일 위치를 맨 아래 / 맨 위 / **커서 위치** 중에 선택. 대상 프롬프트 내용이 편집 가능한 칸으로
+  뜨므로 원하는 자리를 클릭해서 지정하면 되고, 그 김에 기존 내용도 바로 고칠 수 있음
+- 담기 창에서 페르소나/캐릭터 이름을 `{{user}}` / `{{char}}` 매크로로 변환 가능
+  (그룹챗은 멤버 전원을 `{{char}}`로 변환). 체크박스는 매번 바꿀 수 있고 내용도 직접 수정 가능
+- 1글자 이름은 본문 아무 데나 걸려서 변환 대상에서 제외
+
 ## 설정
 
 **확장 기능 > 커스텀 프리셋 매니저**에서 모든 기능을 토글할 수 있습니다:
@@ -126,6 +150,7 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 | 토글 프리셋 표시 | 토글 프리셋 기능 표시/숨김 |
 | 연결 프리셋 표시 | 채팅방별 프리셋 자동 전환 기능 사용 |
 | 프롬프트 자동 저장 | 프롬프트 수정 저장 시 프리셋 자동 저장 |
+| 채팅에서 프롬프트 담기 | 코드블럭/드래그한 텍스트를 프리셋 프롬프트로 담기 (기본 꺼짐) |
 
 
 ---

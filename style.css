@@ -980,3 +980,122 @@
     border-radius: 0 0 11px 11px;
     outline: none;
 }
+
+/* ===== Prompt Capture (채팅 → 프리셋 프롬프트 담기) ===== */
+
+/* 코어의 .code-copy(right: 0, 22px, margin 4px) 바로 왼쪽에 나란히 놓는다. */
+.custom_preset_code_capture {
+    cursor: pointer;
+    position: absolute;
+    top: 0;
+    right: 26px;
+    height: 22px;
+    width: 22px;
+    margin: 4px;
+    opacity: 0.4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom_preset_code_capture:hover {
+    opacity: 0.9;
+}
+
+.custom_preset_capture_selection_btn {
+    position: fixed;
+    z-index: 2147483646;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    background-color: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    color: var(--SmartThemeBodyColor);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    -webkit-user-select: none;
+    /* 모바일에서 탭이 확대/지연 없이 바로 먹도록 */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.custom_preset_capture_selection_btn:hover {
+    filter: brightness(1.2);
+}
+
+.custom_preset_capture_menu {
+    position: fixed;
+    z-index: 10003;
+    min-width: 190px;
+    padding: 4px;
+    border-radius: 8px;
+    background-color: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    user-select: none;
+}
+
+.custom_preset_capture_menu_item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    white-space: nowrap;
+    color: var(--SmartThemeBodyColor);
+}
+
+.custom_preset_capture_menu_item:hover {
+    background-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 25%, transparent);
+}
+
+.custom_preset_capture_menu_item i {
+    width: 14px;
+    text-align: center;
+    opacity: 0.75;
+}
+
+.custom_preset_capture_modal {
+    min-width: 0;
+    max-width: 640px;
+    width: calc(100% - 20px);
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.custom_preset_capture_modal .custom_preset_compare_textarea {
+    min-height: 180px;
+    max-height: 340px;
+}
+
+.custom_preset_capture_existing {
+    width: 100%;
+    min-height: 120px;
+    max-height: 240px;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 0.85em;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-sizing: border-box;
+}
+
+.custom_preset_capture_existing:disabled {
+    opacity: 0.5;
+}
+
+/* 터치 기기는 손가락으로 누를 수 있게 조금 키운다. */
+@media (hover: none) and (pointer: coarse) {
+    .custom_preset_capture_selection_btn {
+        width: 42px;
+        height: 42px;
+        font-size: 1.05em;
+    }
+}
