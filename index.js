@@ -3640,21 +3640,16 @@ function showCaptureMenu(x, y, rawText) {
 }
 
 /**
- * 커서 위치에 텍스트를 끼워넣되, 문단이 붙어버리지 않게 앞뒤로 빈 줄을 채운다.
- * 이미 빈 줄이 있으면 더 넣지 않는다.
+ * 커서 위치에 텍스트를 그대로 끼워넣는다.
+ * 커서를 놓은 딱 그 자리에 들어가야 하므로 앞뒤 개행을 임의로 붙이지 않는다.
+ * 줄바꿈이 필요하면 담을 내용 칸에서 직접 넣으면 된다.
  * @param {string} existing 기존 내용
  * @param {string} insert 끼워넣을 내용
  * @param {number} caret 커서 오프셋
  */
 function spliceAtCaret(existing, insert, caret) {
     const position = Math.max(0, Math.min(caret ?? existing.length, existing.length));
-    const before = existing.slice(0, position);
-    const after = existing.slice(position);
-
-    const prefix = (!before || before.endsWith('\n\n')) ? '' : (before.endsWith('\n') ? '\n' : '\n\n');
-    const suffix = (!after || after.startsWith('\n\n')) ? '' : (after.startsWith('\n') ? '\n' : '\n\n');
-
-    return before + prefix + insert + suffix + after;
+    return existing.slice(0, position) + insert + existing.slice(position);
 }
 
 function refreshCustomizerList() {
