@@ -1206,7 +1206,22 @@ function showQuickToggleGroupModal() {
     let selectedGroup = model.keys().next().value || '';
     let memberKeyword = '';
 
+    // 다른 모달과 같은 방식으로 JS가 위치를 잡는다.
+    // (CSS로 중앙정렬하면 상위 요소의 transform 때문에 기준이 어긋난다)
+    let lastViewWidth = -1;
+    const positionModal = () => {
+        modal.style.top = Math.max(10, (window.innerHeight - modal.offsetHeight) / 2) + 'px';
+
+        // 키보드가 올라올 때는 세로만 바뀐다. 가로까지 다시 계산하면 모달이 좌우로 흔들린다.
+        const viewWidth = window.innerWidth;
+        if (viewWidth === lastViewWidth) return;
+        lastViewWidth = viewWidth;
+        modal.style.left = Math.max(10, (viewWidth - modal.offsetWidth) / 2) + 'px';
+    };
+
     const removeModal = () => {
+        window.removeEventListener('resize', positionModal);
+        window.visualViewport?.removeEventListener('resize', positionModal);
         overlay.remove();
         modal.remove();
     };
@@ -1535,12 +1550,10 @@ function showQuickToggleGroupModal() {
     document.body.appendChild(overlay);
     document.body.appendChild(modal);
 
-    requestAnimationFrame(() => {
-        const modalHeight = modal.offsetHeight;
-        const modalWidth = modal.offsetWidth;
-        modal.style.top = Math.max(10, (window.innerHeight - modalHeight) / 2) + 'px';
-        modal.style.left = Math.max(10, (window.innerWidth - modalWidth) / 2) + 'px';
-    });
+    requestAnimationFrame(positionModal);
+    // 모바일에서 검색창을 누르면 키보드가 올라와 화면 높이가 바뀐다. 그때 다시 잡아준다.
+    window.addEventListener('resize', positionModal);
+    window.visualViewport?.addEventListener('resize', positionModal);
 }
 
 function createQuickToggleGroupUI() {

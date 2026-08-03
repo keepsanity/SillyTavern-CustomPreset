@@ -317,16 +317,31 @@
     max-width: 720px;
     width: calc(100% - 20px);
     max-height: 85vh;
+    /* 모바일은 주소창 때문에 실제로 보이는 높이가 100vh보다 작다.
+       dvh를 지원하면 그쪽을 쓴다 (지원 안 하면 위의 vh가 그대로 적용) */
+    max-height: 85dvh;
     display: flex;
     flex-direction: column;
+    /* 없으면 내용이 모달 밖으로 삐져나가 뒤쪽 화면 위에 그려진다 */
+    overflow: hidden;
 }
 
+.custom_preset_group_modal h3,
+.custom_preset_group_modal > p {
+    flex: 0 0 auto;
+}
+
+/* 넘치는 내용은 본문 안에서 스크롤시키고, 하단 버튼은 항상 보이게 남긴다 */
 .custom_preset_group_body {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
+    flex: 1 1 auto;
     min-height: 0;
-    flex: 1;
+    overflow-y: auto;
+    /* overflow-y만 지정하면 가로도 스크롤 가능해진다.
+       그러면 검색창을 누를 때 브라우저가 입력창을 보이게 하려고 안쪽을 가로로 민다. */
+    overflow-x: hidden;
 }
 
 .custom_preset_group_pane {
@@ -336,6 +351,13 @@
     min-width: 200px;
     flex: 1;
     min-height: 0;
+}
+
+/* 검색창이 칸을 삐져나가지 않게 (삐져나가면 가로로 밀리는 원인이 된다) */
+.custom_preset_group_pane > input.text_pole {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .custom_preset_group_pane_label {
@@ -452,12 +474,42 @@
     gap: 8px;
     justify-content: flex-end;
     margin-top: 12px;
+    /* 본문이 아무리 길어도 이 줄은 밀려나지 않는다 */
+    flex: 0 0 auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--SmartThemeBorderColor);
 }
 
 .custom_preset_group_footer .menu_button {
     flex-direction: row;
     white-space: nowrap;
     width: auto;
+}
+
+/* 모바일: 두 칸이 세로로 쌓이므로 안쪽 스크롤을 없애고 본문 하나만 스크롤시킨다 */
+@media (max-width: 600px) {
+    .custom_preset_group_modal {
+        max-height: 88vh;
+        max-height: 88dvh;
+        /* 위치 계산이 왼쪽을 최소 10px로 잡으므로 좌우 여백도 10px씩(=20px)이어야
+           가운데로 온다. 이보다 넓히면 오른쪽만 모서리에 달라붙는다. */
+        width: calc(100% - 20px);
+        padding: 14px;
+    }
+
+    .custom_preset_group_pane {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+
+    .custom_preset_group_list,
+    .custom_preset_group_member_list {
+        max-height: none;
+        min-height: 60px;
+        /* overflow-y만 visible로 두면 overflow-x: hidden 때문에 auto로 되돌아가
+           안쪽 스크롤이 그대로 남는다. 두 축을 함께 풀어야 본문 하나만 스크롤된다. */
+        overflow: visible;
+    }
 }
 
 .custom_preset_toggle_preset_row {
