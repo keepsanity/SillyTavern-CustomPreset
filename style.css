@@ -285,6 +285,66 @@
     width: 100%;
 }
 
+/* 프롬프트 편집창 텍스트에리어 하한선 올리기
+   폼이 세로 flex라 항목을 추가할 때마다 텍스트에리어(flex:1)가 그만큼 줄어든다.
+   ST 기본 하한선은 promptmanager.css의 min-height: 200px 이고, 이 확장이 붙이는
+   위치/빠른토글 칸까지 더해지면 거기까지 내려앉는다. 하한선을 올리면 그 아래로는
+   안 줄고 대신 팝업이 스크롤된다. (팝업은 이미 overflow-y: auto 라 따로 줄 필요 없음)
+   ST 규칙보다 선택자를 한 단계 더 구체적으로 잡아 확실히 이긴다. */
+#completion_prompt_manager_popup .completion_prompt_manager_popup_entry_form .completion_prompt_manager_popup_entry_form_control #completion_prompt_manager_popup_entry_form_prompt {
+    min-height: max(240px, 45vh);
+}
+
+/* Keyword Trigger in Prompt Editor
+   Triggers 칸의 ST 안내문 자리를 그대로 넘겨받는다. 새 행을 만들지 않기 때문에
+   프롬프트 텍스트에리어(flex:1)의 높이를 빼앗지 않는다. */
+.custom_preset_keyword_trigger_block {
+    font-size: calc(var(--mainFontSize) * 0.9);
+    line-height: 1.4;
+}
+
+.custom_preset_keyword_trigger_link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.custom_preset_keyword_trigger_link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+/* 키워드가 0개면 조건 없이 항상 발동 — 설정하다 만 상태와 헷갈리지 않게 */
+.custom_preset_keyword_trigger_link.custom_preset_keyword_trigger_empty {
+    color: var(--warning, #e0a030);
+    opacity: 1;
+}
+
+/* 마커에 키워드를 걸어둔 상태 — 조용히 통째로 빠지는 걸 눈에 띄게 한다 */
+.custom_preset_keyword_trigger_warn {
+    display: block;
+    color: var(--warning, #e0a030);
+}
+
+.custom_preset_keyword_trigger_modal {
+    max-width: 460px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.custom_preset_keyword_trigger_modal textarea,
+.custom_preset_keyword_trigger_modal select {
+    width: 100%;
+}
+
+.custom_preset_keyword_trigger_modal textarea {
+    resize: vertical;
+    /* 쉼표 구분이라 줄바꿈 없이 이어 쓰고, 길어지면 줄바꿈되어 보이게 한다 */
+    white-space: normal;
+}
+
 /* Toggle Preset Section */
 #custom_preset_toggle_preset_section {
     margin-top: 15px;

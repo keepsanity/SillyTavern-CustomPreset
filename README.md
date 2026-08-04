@@ -59,6 +59,29 @@ A SillyTavern extension for managing and customizing prompt presets.
   (group chats convert every member to `{{char}}`). The checkbox is per-capture and the text stays editable
 - Names shorter than 2 characters are skipped — they match too much text to be safe
 
+### Keyword Trigger (off by default)
+- Adds a **Keyword** entry to the **Triggers** list in the prompt editor
+- A prompt that picks it is only included when one of its keywords shows up in the recent chat
+- Keyword is an **AND** condition on top of the existing generation-type filter — picking
+  *Keyword + Normal* means "normal generation **and** a keyword hit". Picking Keyword alone
+  applies to every generation type
+- Pick **Keyword** under Triggers and a one-line settings link appears inside the Triggers column,
+  taking over the spot of ST's own helper text — so the prompt textarea keeps its height.
+  Nothing is shown at all until Keyword is selected
+- Keywords use the same syntax as a lorebook: comma separated, with `/regex/flags` entries
+  allowed inline (commas inside a regex are preserved). ST's own `splitKeywordsAndRegexes`
+  does the parsing, so there is no second dialect to learn
+- Per-prompt settings dialog: keyword list, OR/AND, case sensitivity,
+  scan target (all / user only / AI only), and a scan depth that overrides the global one
+- With no keywords at all the prompt fires unconditionally — an empty list is not a match-nothing list
+- `keyword` is never written into the preset's `injection_trigger`; it is stored in a separate
+  `keyword_trigger` field. So if the extension is off or the preset is shared with someone who
+  does not have it, the prompt simply behaves as a normal prompt instead of silently never firing
+- Marker entries (World Info, Char Description, Scenario, Persona Description) show a warning:
+  if the keyword misses, the whole block they stand for is left out of the request.
+  Chat History and Chat Examples cannot be edited in the prompt manager at all, so they are out of reach
+- Note: prompts that come and go per turn invalidate the provider's prompt cache for that turn
+
 ## Settings
 
 All features can be toggled in **Extensions > Custom Preset Manager**:
@@ -74,6 +97,10 @@ All features can be toggled in **Extensions > Custom Preset Manager**:
 | Show Linked Preset | Enable per-chat automatic preset switching |
 | Auto-save Preset | Automatically save the preset when saving a prompt edit |
 | Capture Prompts from Chat | Capture code blocks / selected text from chat into a preset prompt (off by default) |
+| Prompt Keyword Trigger | Add "Keyword" to the Triggers list, plus the global default scan depth (off by default) |
+
+The extension also raises the prompt editor's textarea floor from ST's 200px to `max(240px, 45vh)`,
+so the extra rows it adds to the editor do not squeeze the textarea. The popup scrolls instead.
 
 ---
 
@@ -136,6 +163,28 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
   (그룹챗은 멤버 전원을 `{{char}}`로 변환). 체크박스는 매번 바꿀 수 있고 내용도 직접 수정 가능
 - 1글자 이름은 본문 아무 데나 걸려서 변환 대상에서 제외
 
+### 프롬프트 키워드 트리거 (기본 꺼짐)
+- 프롬프트 편집의 **Triggers** 목록에 **키워드** 항목이 추가됨
+- 이걸 고른 프롬프트는 최근 대화에 키워드가 있을 때만 프롬프트에 들어감
+- 키워드는 기존 생성타입 필터를 대체하지 않고 **AND로 얹히는 조건**.
+  *키워드 + Normal*을 고르면 "일반 생성이면서 키워드가 걸릴 때". 키워드만 고르면 모든 생성타입에 적용
+- Triggers에서 **키워드**를 골라야 Triggers 칸 안에 설정 링크가 한 줄 나타남.
+  ST 자체 안내문 자리를 넘겨받는 방식이라 프롬프트 텍스트에리어 높이를 안 뺏음.
+  키워드를 안 고르면 아무것도 안 보임
+- 키워드 문법은 로어북과 동일: 쉼표로 구분하고 `/정규식/플래그` 항목을 섞어 쓸 수 있음
+  (정규식 안의 쉼표는 보존됨). ST의 `splitKeywordsAndRegexes`를 그대로 가져다 쓰므로
+  따로 익힐 문법이 없음
+- 프롬프트별 설정창: 키워드 목록, OR/AND, 대소문자 구분,
+  스캔 대상(전체/유저만/AI만), 전역값을 덮어쓰는 스캔 깊이
+- 키워드를 하나도 안 적으면 조건 없이 항상 발동함 (빈 목록 = 아무것도 안 걸림, 이 아님)
+- `keyword`는 프리셋의 `injection_trigger`에 저장되지 않고 별도 `keyword_trigger` 필드로 들어감.
+  그래서 확장을 끄거나 이 확장이 없는 사람에게 프리셋을 넘겨도 그냥 평범한 프롬프트로 동작함
+  (조용히 안 뜨는 프롬프트가 되지 않음)
+- 마커 항목(월드 인포, 캐릭터 설명, 시나리오, 페르소나 설명)에는 경고가 뜸.
+  키워드가 안 걸리면 거기 채워질 내용이 요청에서 통째로 빠지기 때문.
+  Chat History와 Chat Examples는 프롬프트 매니저에서 편집 자체가 막혀 있어 애초에 설정 불가
+- 참고: 턴마다 들어갔다 빠지는 프롬프트는 그 턴의 프롬프트 캐시를 깨뜨림
+
 ## 설정
 
 **확장 기능 > 커스텀 프리셋 매니저**에서 모든 기능을 토글할 수 있습니다:
@@ -151,6 +200,10 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 | 연결 프리셋 표시 | 채팅방별 프리셋 자동 전환 기능 사용 |
 | 프롬프트 자동 저장 | 프롬프트 수정 저장 시 프리셋 자동 저장 |
 | 채팅에서 프롬프트 담기 | 코드블럭/드래그한 텍스트를 프리셋 프롬프트로 담기 (기본 꺼짐) |
+| 프롬프트 키워드 트리거 | Triggers에 "키워드" 추가 + 전역 기본 스캔 깊이 (기본 꺼짐) |
+
+이 확장은 프롬프트 편집창 텍스트에리어의 최소 높이도 ST 기본값 200px에서 `max(240px, 45vh)`로 올립니다.
+편집창에 항목이 늘어나도 텍스트에리어가 쪼그라들지 않고, 대신 팝업이 스크롤됩니다.
 
 
 ---

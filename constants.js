@@ -19,6 +19,18 @@ export const QUICK_TOGGLE_SET_SEPARATOR = '::';
 // 1글자 이름은 본문 아무 데나 걸려서 오탐이 심하므로 건너뛴다.
 export const CAPTURE_MIN_NAME_LENGTH = 2;
 
+// 키워드 트리거 설정이 붙는 프롬프트 필드. 프리셋에 같이 저장되고 공유된다.
+export const KEYWORD_TRIGGER_KEY = 'keyword_trigger';
+
+// Triggers 셀렉트에 끼워넣는 가상 옵션 값.
+// 저장 직전에 injection_trigger에서 다시 빼내고 KEYWORD_TRIGGER_KEY로 옮기기 때문에,
+// 확장이 없는 환경에서 프리셋을 열어도 "어떤 생성타입에도 안 걸리는 죽은 프롬프트"가 되지 않는다.
+export const KEYWORD_TRIGGER_OPTION = 'keyword';
+
+// 스캔 깊이를 비워두면 확장 설정의 전역값을 쓴다.
+export const KEYWORD_TRIGGER_DEFAULT_DEPTH = 2;
+export const KEYWORD_TRIGGER_MAX_DEPTH = 999;
+
 export const FEATURE_DEFAULTS = {
     showPresetCustomizerButton: true,
     showQuickPromptToggleFeature: true,
@@ -39,6 +51,10 @@ export const FEATURE_DEFAULTS = {
     promptCaptureFromSelection: true,
     // 캡처 창을 열 때 {{user}}/{{char}} 치환 체크박스의 초기 상태
     promptCaptureMacroDefault: true,
+    // 프롬프트 키워드 트리거 (기본 꺼짐)
+    showKeywordTriggerFeature: false,
+    // 프롬프트별로 따로 지정하지 않았을 때 쓰는 스캔 깊이 (최근 메시지 N개)
+    keywordTriggerScanDepth: KEYWORD_TRIGGER_DEFAULT_DEPTH,
     translationProfileId: '',
     translationPromptTemplate: '',
     translations: {},
