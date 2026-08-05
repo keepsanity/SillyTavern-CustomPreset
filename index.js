@@ -1,12 +1,14 @@
-import { openai_settings, openai_setting_names, oai_settings, promptManager } from '../../../openai.js';
+import { promptManager } from '../../../openai.js';
 import { uuidv4 } from '../../../utils.js';
-import { extension_settings, saveMetadataDebounced } from '../../../extensions.js';
-import { eventSource, event_types, saveSettingsDebounced, chat_metadata, Generate, main_api, stopGeneration, name1, name2, characters, this_chid, chat } from '../../../../script.js';
+import { saveMetadataDebounced } from '../../../extensions.js';
+import { eventSource, event_types, saveSettingsDebounced, chat_metadata, Generate, main_api, stopGeneration, name1, name2, characters, this_chid } from '../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../group-chats.js';
-import { splitKeywordsAndRegexes, parseRegexFromString } from '../../../world-info.js';
 import { getTokenCountAsync } from '../../../tokenizers.js';
 import { L } from './translations.js';
-import { EXTENSION_NAME, GLOBAL_PROMPT_CHARACTER_ID, QUICK_TOGGLE_NAME_KEY, QUICK_TOGGLE_ENABLED_KEY, QUICK_TOGGLE_GROUP_SEPARATOR, QUICK_TOGGLE_SET_SEPARATOR, CAPTURE_MIN_NAME_LENGTH, FEATURE_DEFAULTS, KEYWORD_TRIGGER_KEY, KEYWORD_TRIGGER_OPTION, KEYWORD_TRIGGER_DEFAULT_DEPTH, KEYWORD_TRIGGER_MAX_DEPTH } from './constants.js';
+import { EXTENSION_NAME, GLOBAL_PROMPT_CHARACTER_ID, QUICK_TOGGLE_NAME_KEY, QUICK_TOGGLE_ENABLED_KEY, QUICK_TOGGLE_GROUP_SEPARATOR, QUICK_TOGGLE_SET_SEPARATOR, CAPTURE_MIN_NAME_LENGTH, KEYWORD_TRIGGER_DEFAULT_DEPTH, KEYWORD_TRIGGER_MAX_DEPTH } from './constants.js';
+import { getFeatureSettings, saveFeatureSettings } from './settings-store.js';
+import { getActivePromptManagerPreset, getActivePresetName, getPresetNames, getPresetByName, getOrderedPrompts } from './preset-utils.js';
+import { getGlobalKeywordScanDepth, ensureKeywordTriggerControls, updateKeywordTriggerSummary, loadKeywordTriggerFormForPrompt, applyKeywordTriggerToPrompt, ensureKeywordTriggerPatch, resetKeywordTriggerDraft } from './keyword-trigger.js';
 
 let isPanelOpen = false;
 let quickPopupObserver = null;
@@ -41,23 +43,6 @@ function clearSearch() {
     triggerSearch();
 }
 
-function getFeatureSettings() {
-    if (!extension_settings[EXTENSION_NAME] || typeof extension_settings[EXTENSION_NAME] !== 'object') {
-        extension_settings[EXTENSION_NAME] = {};
-    }
-    const settings = extension_settings[EXTENSION_NAME];
-    for (const key of Object.keys(FEATURE_DEFAULTS)) {
-        if (!(key in settings)) {
-            settings[key] = FEATURE_DEFAULTS[key];
-        }
-    }
-    return settings;
-}
-
-function saveFeatureSettings() {
-    extension_settings[EXTENSION_NAME] = getFeatureSettings();
-    saveSettingsDebounced();
-}
 
 // ========== Toggle Preset Data Helpers ==========
 
@@ -337,16 +322,6 @@ function isPromptPositionFeatureEnabled() {
     return getFeatureSettings().showPromptPositionFeature !== false;
 }
 
-function isKeywordTriggerFeatureEnabled() {
-    return getFeatureSettings().showKeywordTriggerFeature === true;
-}
-
-function getGlobalKeywordScanDepth() {
-    const depth = Number(getFeatureSettings().keywordTriggerScanDepth);
-    if (!Number.isFinite(depth) || depth < 1) return KEYWORD_TRIGGER_DEFAULT_DEPTH;
-    return Math.min(Math.floor(depth), KEYWORD_TRIGGER_MAX_DEPTH);
-}
-
 function isQuickToggleBarCollapsed() {
     return getFeatureSettings().quickPromptToggleBarCollapsed === true;
 }
@@ -355,47 +330,6 @@ function setQuickToggleBarCollapsed(collapsed) {
     const settings = getFeatureSettings();
     settings.quickPromptToggleBarCollapsed = !!collapsed;
     saveFeatureSettings();
-}
-
-function getCurrentPresetName() {
-    if (oai_settings?.preset_settings_openai) {
-        return oai_settings.preset_settings_openai;
-    }
-    const select = document.getElementById('custom_preset_select');
-    return select?.value || '';
-}
-
-function getCurrentPreset() {
-    const presetName = getCurrentPresetName();
-    if (!presetName) return null;
-    return getPresetByName(presetName);
-}
-
-function getActivePromptManagerPreset() {
-    const serviceSettings = promptManager?.serviceSettings;
-    if (serviceSettings?.prompts && serviceSettings?.prompt_order) {
-        return serviceSettings;
-    }
-    return getCurrentPreset();
-}
-
-/**
- * Get all preset names
- * @returns {string[]} Array of preset names
- */
-function getPresetNames() {
-    return Object.keys(openai_setting_names);
-}
-
-/**
- * Get preset by name
- * @param {string} name - Preset name
- * @returns {object|null} Preset object or null
- */
-function getPresetByName(name) {
-    const index = openai_setting_names[name];
-    if (index === undefined) return null;
-    return openai_settings[index];
 }
 
 function ensureQuickTogglePopupControls() {
@@ -498,8 +432,18 @@ function readQuickToggleForm() {
 function loadQuickToggleFormForPrompt(promptId) {
     ensureQuickTogglePopupControls();
     loadPositionSelectForPrompt(promptId);
-    loadKeywordTriggerFormForPrompt(promptId);
     ensureTranslateButtonInPopup();
+
+    // 키워드 칸 채우기는 이 함수 안에서 제일 마지막에, 그리고 격리해서 돌린다.
+    // 앞쪽에 두면 여기서 난 예외가 빠른 토글 칸을 빈 채로 남겨 버린다.
+    // (이 함수는 중간에 return하는 경로가 있어 setTimeout으로 뒤로 미룬다)
+    setTimeout(() => {
+        try {
+            loadKeywordTriggerFormForPrompt(promptId);
+        } catch (e) {
+            console.error(`[${EXTENSION_NAME}] keyword trigger form failed`, e);
+        }
+    }, 0);
 
     const nameInput = document.getElementById('custom_preset_quick_toggle_name');
     const enabledInput = document.getElementById('custom_preset_quick_toggle_enabled');
@@ -598,471 +542,6 @@ function applyQuickToggleDataToPrompt(promptId, quickData) {
     renderQuickToggleButtons();
 }
 
-/* ── 키워드 트리거 ─────────────────────────────────────────────────────────
- * Triggers 셀렉트에 "키워드" 옵션을 하나 얹고, 고른 프롬프트는 최근 대화에
- * 키워드가 있을 때만 들어가게 한다. 실제 판정은 PromptManager.shouldTrigger를
- * 감싸서 하고, 생성타입 필터(Normal/Continue/...)는 ST 원본 로직을 그대로 쓴다.
- * 즉 키워드는 기존 필터를 대체하지 않고 AND로 얹히는 조건이다.
- */
-
-// 편집창에 떠 있는 프롬프트의 작업본. 프롬프트를 저장할 때 실제 프롬프트에 반영된다.
-let keywordTriggerDraft = { promptId: null, isMarker: false, config: normalizeKeywordTriggerConfig(null) };
-let shouldTriggerPatched = false;
-
-function normalizeKeywordTriggerConfig(raw) {
-    const cfg = (raw && typeof raw === 'object') ? raw : {};
-
-    // 앞뒤 쉼표까지 털어낸다. ST의 쉼표 토크나이저는 ",,"처럼 붙여 쓰면 ", 도서관" 같은
-    // 토큰을 흘리는데(로어북도 동일), 그대로 두면 절대 안 걸리는 키워드가 조용히 남는다.
-    let keywords = Array.isArray(cfg.keywords)
-        ? cfg.keywords.map(keyword => String(keyword ?? '').replace(/^[\s,]+|[\s,]+$/g, '')).filter(Boolean)
-        : [];
-
-    // 예전에는 "정규식으로 해석" 체크박스 하나로 목록 전체를 정규식 취급했다.
-    // 지금은 로어북과 같게 /패턴/ 형태만 정규식이므로, 옛 설정은 한 번 감싸서 옮긴다.
-    // (저장은 새 모양으로만 되므로 이 변환은 프롬프트당 한 번만 일어난다.)
-    if (cfg.regex === true) {
-        keywords = keywords.map(keyword => parseRegexFromString(keyword)
-            ? keyword
-            : `/${keyword.replace(/\//g, '\\/')}/`);
-    }
-
-    // null이면 확장 설정의 전역 깊이를 따른다.
-    let scanDepth = null;
-    if (cfg.scanDepth !== null && cfg.scanDepth !== undefined && cfg.scanDepth !== '') {
-        const parsed = Number(cfg.scanDepth);
-        if (Number.isFinite(parsed) && parsed >= 1) {
-            scanDepth = Math.min(Math.floor(parsed), KEYWORD_TRIGGER_MAX_DEPTH);
-        }
-    }
-
-    return {
-        enabled: cfg.enabled === true,
-        keywords,
-        matchAll: cfg.matchAll === true,
-        caseSensitive: cfg.caseSensitive === true,
-        scanTarget: ['all', 'user', 'assistant'].includes(cfg.scanTarget) ? cfg.scanTarget : 'all',
-        scanDepth,
-    };
-}
-
-function getKeywordTriggerConfig(prompt) {
-    return normalizeKeywordTriggerConfig(prompt?.[KEYWORD_TRIGGER_KEY]);
-}
-
-function getKeywordTriggerField() {
-    return document.getElementById('completion_prompt_manager_popup_entry_form_injection_trigger');
-}
-
-function isKeywordTriggerSelected() {
-    const triggerField = getKeywordTriggerField();
-    if (!triggerField) return false;
-    return Array.from(triggerField.selectedOptions).some(option => option.value === KEYWORD_TRIGGER_OPTION);
-}
-
-function ensureKeywordTriggerControls() {
-    const triggerField = getKeywordTriggerField();
-    if (!triggerField) return;
-
-    // 기능을 끄면 옵션 자체를 빼서 새로 고를 수 없게 한다.
-    // 이미 설정된 프롬프트는 shouldTrigger 쪽에서 조건을 무시하고 평소처럼 발동한다.
-    const existing = triggerField.querySelector('option[data-custom-preset-keyword]');
-    if (isKeywordTriggerFeatureEnabled()) {
-        if (!existing) {
-            const option = document.createElement('option');
-            option.value = KEYWORD_TRIGGER_OPTION;
-            option.textContent = L.keywordTriggerOption;
-            option.dataset.customPresetKeyword = '1';
-            triggerField.appendChild(option);
-        }
-    } else if (existing) {
-        existing.remove();
-    }
-
-    if (!triggerField.dataset.customPresetKeywordBound) {
-        triggerField.addEventListener('change', () => updateKeywordTriggerSummary());
-        triggerField.dataset.customPresetKeywordBound = '1';
-    }
-
-    if (document.getElementById('custom_preset_keyword_trigger_block')) return;
-
-    // 편집창 폼은 세로 flex이고 프롬프트 텍스트에리어가 flex:1로 남는 높이를 다 먹는다.
-    // (promptmanager.css의 .completion_prompt_manager_popup_entry_form_control:has(#..._form_prompt))
-    // 즉 행을 하나 추가하면 그만큼 텍스트에리어가 그대로 줄어든다.
-    // 그래서 새 행을 만들지 않고 Triggers 칸 안, 이미 있는 안내문 자리에 한 줄로 끼워넣는다.
-    const triggerControl = triggerField.parentElement;
-    if (!triggerControl) return;
-
-    const block = document.createElement('div');
-    block.id = 'custom_preset_keyword_trigger_block';
-    block.className = 'custom_preset_keyword_trigger_block';
-    block.style.display = 'none';
-
-    const editLink = document.createElement('a');
-    editLink.id = 'custom_preset_keyword_trigger_edit';
-    editLink.className = 'custom_preset_keyword_trigger_link';
-    editLink.title = L.keywordTriggerEdit;
-
-    const icon = document.createElement('i');
-    icon.className = 'fa-solid fa-gear';
-
-    const summary = document.createElement('span');
-    summary.id = 'custom_preset_keyword_trigger_summary';
-
-    editLink.appendChild(icon);
-    editLink.appendChild(summary);
-    editLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showKeywordTriggerModal();
-    });
-
-    // 마커일 때만 나오는 경고. 평소에는 아예 렌더링하지 않아 높이를 안 먹는다.
-    const warn = document.createElement('small');
-    warn.id = 'custom_preset_keyword_trigger_warn';
-    warn.className = 'custom_preset_keyword_trigger_warn';
-    warn.textContent = L.keywordTriggerMarkerWarn;
-    warn.style.display = 'none';
-
-    block.appendChild(editLink);
-    block.appendChild(warn);
-
-    triggerControl.appendChild(block);
-}
-
-function updateKeywordTriggerSummary() {
-    const block = document.getElementById('custom_preset_keyword_trigger_block');
-    if (!block) return;
-
-    // Triggers에서 "키워드"를 고른 프롬프트에서만 보인다.
-    const visible = isKeywordTriggerFeatureEnabled() && isKeywordTriggerSelected();
-    block.style.display = visible ? '' : 'none';
-
-    // 우리 줄이 보이는 동안에는 ST의 "Filter to specific generation types." 안내를 대신한다.
-    // 자리를 새로 만들지 않고 넘겨받는 것이라 텍스트에리어 높이가 그대로 유지된다.
-    const stHint = block.parentElement?.querySelector('.text_muted');
-    if (stHint) stHint.style.display = visible ? 'none' : '';
-
-    if (!visible) return;
-
-    const config = keywordTriggerDraft.config;
-
-    const summary = document.getElementById('custom_preset_keyword_trigger_summary');
-    if (summary) {
-        summary.textContent = config.keywords.length
-            ? L.keywordTriggerSummary(config.keywords.length)
-            : L.keywordTriggerNone;
-    }
-
-    // 키워드가 0개면 조건 없이 항상 발동한다. 설정하다 만 상태로 착각하기 쉬우니 눈에 띄게 한다.
-    document.getElementById('custom_preset_keyword_trigger_edit')
-        ?.classList.toggle('custom_preset_keyword_trigger_empty', config.keywords.length === 0);
-
-    // 마커는 자기 내용이 없고 조립할 때 채워지는 자리표시자라, 키워드가 안 걸리면
-    // 그 자리에 들어갈 내용(로어북, 캐릭터 설정 등)이 통째로 빠진다.
-    const warn = document.getElementById('custom_preset_keyword_trigger_warn');
-    if (warn) warn.style.display = keywordTriggerDraft.isMarker ? '' : 'none';
-}
-
-function loadKeywordTriggerFormForPrompt(promptId) {
-    ensureKeywordTriggerControls();
-
-    const prompt = promptId ? promptManager?.getPromptById?.(promptId) : null;
-    keywordTriggerDraft = {
-        promptId: promptId || null,
-        isMarker: prompt?.marker === true,
-        config: getKeywordTriggerConfig(prompt),
-    };
-
-    // PromptManager는 injection_trigger에 없는 값을 무조건 해제하므로,
-    // 저장해 둔 설정을 보고 "키워드" 옵션만 다시 선택 상태로 되돌린다.
-    const option = getKeywordTriggerField()?.querySelector('option[data-custom-preset-keyword]');
-    if (option) option.selected = keywordTriggerDraft.config.enabled;
-
-    updateKeywordTriggerSummary();
-}
-
-function applyKeywordTriggerToPrompt(promptId) {
-    const prompt = promptManager?.getPromptById?.(promptId);
-    if (!prompt) return;
-
-    const triggers = Array.isArray(prompt.injection_trigger) ? prompt.injection_trigger : [];
-    const selected = triggers.includes(KEYWORD_TRIGGER_OPTION);
-
-    // "키워드"는 우리 쪽 필드로 옮기고 injection_trigger에는 생성타입만 남긴다.
-    // 이래야 확장이 없는 환경에서도 프롬프트가 조용히 죽지 않는다.
-    if (selected) {
-        prompt.injection_trigger = triggers.filter(trigger => trigger !== KEYWORD_TRIGGER_OPTION);
-    }
-
-    // 기능이 꺼져 있으면 폼에 옵션 자체가 없다. 기존 설정은 그대로 둔다.
-    if (!isKeywordTriggerFeatureEnabled()) return;
-
-    const draft = keywordTriggerDraft.promptId === promptId
-        ? keywordTriggerDraft.config
-        : getKeywordTriggerConfig(prompt);
-    const config = normalizeKeywordTriggerConfig({ ...draft, enabled: selected });
-
-    if (!config.enabled && !config.keywords.length) {
-        delete prompt[KEYWORD_TRIGGER_KEY];
-    } else {
-        prompt[KEYWORD_TRIGGER_KEY] = config;
-    }
-
-    promptManager.saveServiceSettings?.();
-}
-
-function showKeywordTriggerModal() {
-    const config = keywordTriggerDraft.config;
-
-    const removeModal = () => {
-        overlay.remove();
-        modal.remove();
-        // 취소로 닫을 때도 상태를 다시 계산한다. 안 그러면 Triggers에서 "키워드"가 풀려 있어도
-        // 이 줄이 그대로 남아 켜져 있는 것처럼 보인다.
-        updateKeywordTriggerSummary();
-        // 네이티브 multi-select는 포커스를 잃으면 선택 하이라이트가 흐려져서 체크가 풀린 것처럼
-        // 보인다. 포커스를 돌려줘서 선택 상태가 다시 또렷하게 보이도록 한다.
-        getKeywordTriggerField()?.focus();
-    };
-
-    const overlay = document.createElement('div');
-    overlay.className = 'custom_preset_position_modal_overlay';
-
-    const modal = document.createElement('div');
-    modal.className = 'custom_preset_position_modal custom_preset_keyword_trigger_modal';
-
-    const title = document.createElement('h3');
-    title.textContent = L.keywordTriggerModalTitle;
-    title.style.marginBottom = '10px';
-
-    const makeLabel = (text) => {
-        const label = document.createElement('label');
-        label.innerHTML = `<strong>${text}</strong>`;
-        label.style.display = 'block';
-        label.style.marginTop = '10px';
-        label.style.marginBottom = '4px';
-        return label;
-    };
-
-    const makeNote = (text) => {
-        const note = document.createElement('small');
-        note.className = 'notes';
-        note.textContent = text;
-        note.style.display = 'block';
-        note.style.opacity = '0.6';
-        return note;
-    };
-
-    const makeCheckbox = (text, checked) => {
-        const label = document.createElement('label');
-        label.className = 'checkbox_label';
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.checked = checked;
-        const span = document.createElement('span');
-        span.textContent = text;
-        label.appendChild(input);
-        label.appendChild(span);
-        return { label, input };
-    };
-
-    const keywordsArea = document.createElement('textarea');
-    keywordsArea.className = 'text_pole';
-    keywordsArea.rows = 3;
-    keywordsArea.placeholder = L.keywordTriggerListPlaceholder;
-    keywordsArea.value = config.keywords.join(', ');
-
-    const matchSelect = document.createElement('select');
-    matchSelect.className = 'text_pole';
-    for (const [value, text] of [['any', L.keywordTriggerMatchAny], ['all', L.keywordTriggerMatchAll]]) {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = text;
-        matchSelect.appendChild(option);
-    }
-    matchSelect.value = config.matchAll ? 'all' : 'any';
-
-    const caseSensitive = makeCheckbox(L.keywordTriggerCase, config.caseSensitive);
-
-    const targetSelect = document.createElement('select');
-    targetSelect.className = 'text_pole';
-    for (const [value, text] of [['all', L.keywordTriggerScanAll], ['user', L.keywordTriggerScanUser], ['assistant', L.keywordTriggerScanAssistant]]) {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = text;
-        targetSelect.appendChild(option);
-    }
-    targetSelect.value = config.scanTarget;
-
-    const depthInput = document.createElement('input');
-    depthInput.type = 'number';
-    depthInput.className = 'text_pole';
-    depthInput.min = '1';
-    depthInput.max = String(KEYWORD_TRIGGER_MAX_DEPTH);
-    depthInput.placeholder = L.keywordTriggerDepthPlaceholder(getGlobalKeywordScanDepth());
-    depthInput.value = config.scanDepth === null ? '' : String(config.scanDepth);
-
-    const btnRow = document.createElement('div');
-    btnRow.style.display = 'flex';
-    btnRow.style.gap = '8px';
-    btnRow.style.justifyContent = 'flex-end';
-    btnRow.style.marginTop = '15px';
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'menu_button';
-    cancelBtn.textContent = L.cancel;
-    cancelBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeModal();
-    });
-
-    const confirmBtn = document.createElement('button');
-    confirmBtn.type = 'button';
-    confirmBtn.className = 'menu_button';
-    confirmBtn.textContent = L.confirm;
-    confirmBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        keywordTriggerDraft.config = normalizeKeywordTriggerConfig({
-            ...keywordTriggerDraft.config,
-            // 줄바꿈으로 붙여넣어도 되게 쉼표로 바꿔서 넘긴다.
-            keywords: splitKeywordsAndRegexes(keywordsArea.value.replace(/\n/g, ',')),
-            matchAll: matchSelect.value === 'all',
-            caseSensitive: caseSensitive.input.checked,
-            scanTarget: targetSelect.value,
-            scanDepth: depthInput.value.trim(),
-        });
-        removeModal();
-    });
-
-    btnRow.appendChild(cancelBtn);
-    btnRow.appendChild(confirmBtn);
-
-    modal.appendChild(title);
-    modal.appendChild(makeLabel(L.keywordTriggerListLabel));
-    modal.appendChild(makeNote(`${L.keywordTriggerListHint} ${L.keywordTriggerEmptyWarn}`));
-    modal.appendChild(keywordsArea);
-    modal.appendChild(makeLabel(L.keywordTriggerMatchLabel));
-    modal.appendChild(matchSelect);
-    modal.appendChild(caseSensitive.label);
-    modal.appendChild(makeNote(L.keywordTriggerCaseNote));
-    modal.appendChild(makeLabel(L.keywordTriggerScanTargetLabel));
-    modal.appendChild(targetSelect);
-    modal.appendChild(makeLabel(L.keywordTriggerDepthLabel));
-    modal.appendChild(makeNote(L.keywordTriggerDepthHint));
-    modal.appendChild(depthInput);
-    modal.appendChild(btnRow);
-
-    // 프롬프트 편집창 밖을 눌렀다고 판단해서 ST가 창을 닫아버리는 걸 막는다.
-    const stopAll = (e) => e.stopPropagation();
-    for (const evt of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
-        modal.addEventListener(evt, stopAll);
-        overlay.addEventListener(evt, stopAll);
-    }
-    overlay.addEventListener('click', () => removeModal());
-
-    document.body.appendChild(overlay);
-    document.body.appendChild(modal);
-
-    requestAnimationFrame(() => {
-        const modalHeight = modal.offsetHeight;
-        const modalWidth = modal.offsetWidth;
-        modal.style.top = Math.max(10, (window.innerHeight - modalHeight) / 2) + 'px';
-        modal.style.left = Math.max(10, (window.innerWidth - modalWidth) / 2) + 'px';
-    });
-}
-
-/**
- * 뒤에서부터 검사할 메시지 본문을 모은다.
- * 스캔 대상을 좁히면 깊이도 그 대상들 중에서 센다. ("최근 유저 메시지 2개")
- * @param {number} depth - 모을 메시지 개수
- * @param {'all'|'user'|'assistant'} target - 스캔 대상
- * @returns {string[]}
- */
-function collectKeywordScanTexts(depth, target) {
-    if (!Array.isArray(chat) || chat.length === 0) return [];
-
-    const texts = [];
-    for (let i = chat.length - 1; i >= 0 && texts.length < depth; i--) {
-        const message = chat[i];
-        if (!message || message.is_system) continue;
-        if (target === 'user' && !message.is_user) continue;
-        if (target === 'assistant' && message.is_user) continue;
-        texts.push(String(message.mes ?? ''));
-    }
-    return texts;
-}
-
-function keywordTriggerMatches(config) {
-    // 키워드를 하나도 안 적었으면 거는 조건이 없는 것으로 본다.
-    if (!config.keywords.length) return true;
-
-    const depth = config.scanDepth ?? getGlobalKeywordScanDepth();
-    const texts = collectKeywordScanTexts(depth, config.scanTarget);
-    if (!texts.length) return false;
-
-    const haystack = texts.join('\n');
-    const loweredHaystack = config.caseSensitive ? haystack : haystack.toLowerCase();
-
-    const test = (keyword) => {
-        // 로어북과 같은 규칙: /패턴/플래그 형태만 정규식으로 본다.
-        // 문법이 틀리면 parseRegexFromString이 null을 주고, 그냥 평문 키워드로 취급된다.
-        const regex = parseRegexFromString(keyword);
-        if (regex) return regex.test(haystack);
-
-        // 대소문자 구분 설정은 평문 키워드에만 적용된다. 정규식은 자기 플래그를 따른다.
-        return loweredHaystack.includes(config.caseSensitive ? keyword : keyword.toLowerCase());
-    };
-
-    return config.matchAll ? config.keywords.every(test) : config.keywords.some(test);
-}
-
-/**
- * PromptManager.shouldTrigger를 감싸 키워드 조건을 AND로 얹는다.
- * 인스턴스는 한 번만 만들어지므로 패치도 한 번이면 된다.
- * @returns {boolean} 패치 성공 여부
- */
-function patchPromptManagerShouldTrigger() {
-    if (shouldTriggerPatched) return true;
-    if (!promptManager || typeof promptManager.shouldTrigger !== 'function') return false;
-
-    const original = promptManager.shouldTrigger.bind(promptManager);
-    promptManager.shouldTrigger = function (prompt, generationType) {
-        if (!original(prompt, generationType)) return false;
-        if (!isKeywordTriggerFeatureEnabled()) return true;
-
-        const raw = prompt?.[KEYWORD_TRIGGER_KEY];
-        if (!raw) return true;
-
-        const config = normalizeKeywordTriggerConfig(raw);
-        if (!config.enabled) return true;
-
-        try {
-            return keywordTriggerMatches(config);
-        } catch (e) {
-            // 판정에 실패하면 프롬프트를 조용히 빼는 것보다 넣는 쪽이 안전하다.
-            console.warn(`[${EXTENSION_NAME}] keyword trigger evaluation failed:`, e);
-            return true;
-        }
-    };
-
-    shouldTriggerPatched = true;
-    return true;
-}
-
-/**
- * promptManager는 채팅 완성 설정이 올라온 뒤에야 만들어지므로 몇 번 다시 시도한다.
- */
-function ensureKeywordTriggerPatch(attempt = 0) {
-    if (patchPromptManagerShouldTrigger()) return;
-    if (attempt >= 20) {
-        console.warn(`[${EXTENSION_NAME}] prompt manager not ready, keyword trigger disabled`);
-        return;
-    }
-    setTimeout(() => ensureKeywordTriggerPatch(attempt + 1), 500);
-}
-
 function observePromptPopupChanges() {
     const saveBtn = document.getElementById('completion_prompt_manager_popup_entry_form_save');
     if (!saveBtn) return;
@@ -1077,23 +556,37 @@ function observePromptPopupChanges() {
         // Check if this is a new prompt (not yet in promptManager) before save fires
         const isNewPrompt = !promptManager?.getPromptById?.(promptId);
         setTimeout(() => {
-            // Auto-connect: if it was a new prompt and feature is enabled, link it to prompt_order
-            if (isNewPrompt && getFeatureSettings().autoConnectPrompt) {
-                const addedPrompt = promptManager?.getPromptById?.(promptId);
-                if (addedPrompt && promptManager.activeCharacter) {
-                    promptManager.appendPrompt(addedPrompt, promptManager.activeCharacter);
-                    promptManager.saveServiceSettings();
-                    promptManager.render();
+            // 저장 후처리는 서로 독립이다. 한 기능이 터졌다고 나머지가 통째로 날아가면
+            // "빠른 토글이 저장이 안 된다" 같은 엉뚱한 증상으로 나타나므로 하나씩 격리한다.
+            const step = (label, fn) => {
+                try {
+                    fn();
+                } catch (e) {
+                    console.error(`[${EXTENSION_NAME}] save step failed: ${label}`, e);
                 }
-            }
-            applyKeywordTriggerToPrompt(promptId);
-            applyQuickToggleDataToPrompt(promptId, quickData);
-            if (selectedPosition) {
-                movePromptToPosition(promptId, selectedPosition);
-            }
-            if (getFeatureSettings().autoSavePreset) {
-                document.getElementById('update_oai_preset')?.click();
-            }
+            };
+
+            // Auto-connect: if it was a new prompt and feature is enabled, link it to prompt_order
+            step('auto-connect', () => {
+                if (isNewPrompt && getFeatureSettings().autoConnectPrompt) {
+                    const addedPrompt = promptManager?.getPromptById?.(promptId);
+                    if (addedPrompt && promptManager.activeCharacter) {
+                        promptManager.appendPrompt(addedPrompt, promptManager.activeCharacter);
+                        promptManager.saveServiceSettings();
+                        promptManager.render();
+                    }
+                }
+            });
+            step('quick-toggle', () => applyQuickToggleDataToPrompt(promptId, quickData));
+            step('keyword-trigger', () => applyKeywordTriggerToPrompt(promptId));
+            step('position', () => {
+                if (selectedPosition) movePromptToPosition(promptId, selectedPosition);
+            });
+            step('auto-save', () => {
+                if (getFeatureSettings().autoSavePreset) {
+                    document.getElementById('update_oai_preset')?.click();
+                }
+            });
         }, 0);
     }, true);
 
@@ -1103,8 +596,7 @@ function observePromptPopupChanges() {
     const resetBtn = document.getElementById('completion_prompt_manager_popup_entry_form_reset');
     resetBtn?.addEventListener('click', () => {
         setTimeout(() => {
-            keywordTriggerDraft.config = normalizeKeywordTriggerConfig(null);
-            updateKeywordTriggerSummary();
+            resetKeywordTriggerDraft();
         }, 0);
     }, true);
 
@@ -1338,55 +830,6 @@ function showPositionSelectModal(prompt) {
         modal.style.top = Math.max(10, (viewH - modalHeight) / 2) + 'px';
         modal.style.left = Math.max(10, (viewW - modalWidth) / 2) + 'px';
     });
-}
-
-/**
- * Get prompt by identifier from prompts array
- * @param {object[]} prompts - Array of prompts
- * @param {string} identifier - Prompt identifier
- * @returns {object|null} Prompt object or null
- */
-function getPromptByIdentifier(prompts, identifier) {
-    return prompts.find(p => p && p.identifier === identifier) || null;
-}
-
-/**
- * Get prompts with linkage status based on prompt_order
- * @param {object} preset - Preset object
- * @returns {{prompt: object, isLinked: boolean, isEnabled: boolean}[]} Prompt list with linkage status
- */
-function getOrderedPrompts(preset) {
-    if (!preset || !preset.prompts) return [];
-
-    // Find prompt_order for the global/dummy character (100001)
-    const promptOrderEntry = preset.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
-    const validPrompts = preset.prompts.filter(p => p && p.name);
-    const promptMap = new Map(validPrompts.map(prompt => [prompt.identifier, prompt]));
-    const linkedIdentifiers = new Set();
-
-    if (promptOrderEntry && promptOrderEntry.order && promptOrderEntry.order.length > 0) {
-        // Return linked prompts in the order specified by prompt_order
-        const orderedPrompts = [];
-        for (const orderItem of promptOrderEntry.order) {
-            const prompt = promptMap.get(orderItem.identifier);
-            if (prompt) {
-                orderedPrompts.push({ prompt, isLinked: true, isEnabled: !!orderItem.enabled });
-                linkedIdentifiers.add(prompt.identifier);
-            }
-        }
-
-        // Append prompts that exist in presets but are not connected to prompt_order
-        for (const prompt of validPrompts) {
-            if (!linkedIdentifiers.has(prompt.identifier)) {
-                orderedPrompts.push({ prompt, isLinked: false, isEnabled: false });
-            }
-        }
-
-        return orderedPrompts;
-    }
-
-    // Fallback: no prompt_order means every prompt is effectively unlinked
-    return validPrompts.map(prompt => ({ prompt, isLinked: false, isEnabled: false }));
 }
 
 // ========== Quick Toggle Group ==========
@@ -2815,10 +2258,6 @@ function onPresetSelectChange() {
     const preset = getPresetByName(presetName);
     renderPromptList(preset);
     renderQuickToggleButtons();
-}
-
-function getActivePresetName() {
-    return oai_settings?.preset_settings_openai || '';
 }
 
 // ========== Linked Preset (per-chat) ==========
@@ -5091,8 +4530,14 @@ function applyFeatureVisibility() {
         positionBlock.style.display = settings.showPromptPositionFeature !== false ? '' : 'none';
     }
 
-    ensureKeywordTriggerControls();
-    updateKeywordTriggerSummary();
+    // 이 함수는 마지막에 renderQuickToggleButtons()를 부른다.
+    // 키워드 쪽에서 예외가 나면 그 뒤가 전부 안 돌아 엉뚱한 기능이 사라지므로 격리한다.
+    try {
+        ensureKeywordTriggerControls();
+        updateKeywordTriggerSummary();
+    } catch (e) {
+        console.error(`[${EXTENSION_NAME}] keyword trigger UI failed`, e);
+    }
 
     const togglePresetSection = document.getElementById('custom_preset_toggle_preset_section');
     if (togglePresetSection) {
