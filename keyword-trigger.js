@@ -13,7 +13,7 @@ import { L } from './translations.js';
 import { EXTENSION_NAME, KEYWORD_TRIGGER_KEY, KEYWORD_TRIGGER_OPTION, KEYWORD_TRIGGER_DEFAULT_DEPTH, KEYWORD_TRIGGER_MAX_DEPTH } from './constants.js';
 import { getFeatureSettings } from './settings-store.js';
 
-export function isKeywordTriggerFeatureEnabled() {
+function isKeywordTriggerFeatureEnabled() {
     return getFeatureSettings().showKeywordTriggerFeature === true;
 }
 

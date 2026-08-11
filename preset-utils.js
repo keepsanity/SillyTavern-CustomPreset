@@ -7,7 +7,7 @@ import { GLOBAL_PROMPT_CHARACTER_ID } from './constants.js';
  * 지금 켜져 있는 프리셋 이름. ST 설정이 우선이고, 없으면 패널의 선택값을 쓴다.
  * @returns {string}
  */
-export function getCurrentPresetName() {
+function getCurrentPresetName() {
     if (oai_settings?.preset_settings_openai) {
         return oai_settings.preset_settings_openai;
     }
@@ -15,7 +15,7 @@ export function getCurrentPresetName() {
     return select?.value || '';
 }
 
-export function getCurrentPreset() {
+function getCurrentPreset() {
     const presetName = getCurrentPresetName();
     if (!presetName) return null;
     return getPresetByName(presetName);
@@ -59,16 +59,6 @@ export function getPresetByName(name) {
     const index = openai_setting_names[name];
     if (index === undefined) return null;
     return openai_settings[index];
-}
-
-/**
- * Get prompt by identifier from prompts array
- * @param {object[]} prompts - Array of prompts
- * @param {string} identifier - Prompt identifier
- * @returns {object|null} Prompt object or null
- */
-export function getPromptByIdentifier(prompts, identifier) {
-    return prompts.find(p => p && p.identifier === identifier) || null;
 }
 
 /**
