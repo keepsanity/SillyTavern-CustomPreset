@@ -245,6 +245,113 @@
     filter: grayscale(0.35);
 }
 
+/* ----- 폴더 버튼 (여러 토글을 하나로 접은 버튼) ----- */
+.custom_preset_quick_toggle_folder_button {
+    gap: 5px;
+    align-items: center;
+}
+
+/* 폴더 이름이 길어도 바가 한 버튼에 잡아먹히지 않게 자른다. */
+.custom_preset_quick_toggle_folder_button_label {
+    max-width: 14em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom_preset_quick_toggle_folder_button_count {
+    opacity: 0.65;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+}
+
+.custom_preset_quick_toggle_folder_button_caret {
+    opacity: 0.65;
+    font-size: 0.8em;
+}
+
+/* 바깥을 눌러 닫기 위한 투명 레이어 */
+.custom_preset_quick_toggle_folder_blocker {
+    position: fixed;
+    inset: 0;
+    z-index: 10001;
+}
+
+.custom_preset_quick_toggle_folder_menu {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    min-width: 170px;
+    max-width: min(320px, 90vw);
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 5px;
+    gap: 2px;
+    box-sizing: border-box;
+    background-color: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.custom_preset_quick_toggle_folder_menu_header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px 6px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    margin-bottom: 3px;
+}
+
+.custom_preset_quick_toggle_folder_menu_title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.custom_preset_quick_toggle_folder_bulk {
+    flex-shrink: 0;
+    width: auto !important;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    margin: 0;
+}
+
+.custom_preset_quick_toggle_folder_menu_item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.custom_preset_quick_toggle_folder_menu_item:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.custom_preset_quick_toggle_folder_menu_item.is_off {
+    opacity: 0.55;
+}
+
+.custom_preset_quick_toggle_folder_menu_icon {
+    flex-shrink: 0;
+    width: 1em;
+    text-align: center;
+}
+
+.custom_preset_quick_toggle_folder_menu_label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Position Select Modal */
 .custom_preset_position_modal_overlay {
     position: fixed;
@@ -468,7 +575,7 @@
     font-size: 0.85em;
 }
 
-/* 배타 세트 뱃지 */
+/* 묶음 뱃지 (배타 세트 / 폴더) */
 .custom_preset_group_row_set {
     flex-shrink: 0;
     font-size: 0.75em;
@@ -480,6 +587,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.custom_preset_group_row_folder {
+    border-style: dashed;
 }
 
 .custom_preset_group_actions {

@@ -2,7 +2,7 @@
 // 입력창 위에 버튼을 띄워 프롬프트를 바로 켜고 끈다.
 // 그룹 설정은 프리셋 안에 저장되므로 프리셋을 공유하면 같이 따라간다.
 import { promptManager } from '../../../openai.js';
-import { GLOBAL_PROMPT_CHARACTER_ID, QUICK_TOGGLE_ENABLED_KEY, QUICK_TOGGLE_GROUP_SEPARATOR, QUICK_TOGGLE_NAME_KEY, QUICK_TOGGLE_SET_SEPARATOR } from './constants.js';
+import { GLOBAL_PROMPT_CHARACTER_ID, QUICK_TOGGLE_ENABLED_KEY, QUICK_TOGGLE_FOLDER_SEPARATOR, QUICK_TOGGLE_GROUP_SEPARATOR, QUICK_TOGGLE_NAME_KEY, QUICK_TOGGLE_SET_SEPARATOR } from './constants.js';
 import { getActivePromptManagerPreset, getOrderedPrompts } from './preset-utils.js';
 import { getFeatureSettings, saveFeatureSettings } from './settings-store.js';
 import { matchesSearch, saveActivePreset } from './shared.js';
@@ -178,33 +178,60 @@ function getPromptQuickToggleNames(prompt) {
     return parseQuickToggleNames(prompt[QUICK_TOGGLE_NAME_KEY]);
 }
 
+// 그룹 이름 앞에 붙일 수 있는 접두사 두 가지. 둘은 서로 다른 것을 정하므로 같이 붙일 수 있다.
+// set    "강도::약"   켤 때 같은 태그의 형제를 끌지 (버튼의 동작)
+// folder "연출>>조명" 바에 그대로 나올지, 버튼 하나에 접힐지 (버튼의 위치)
+const CONTAINER_SEPARATORS = [
+    { type: 'set', field: 'setName', separator: QUICK_TOGGLE_SET_SEPARATOR },
+    { type: 'folder', field: 'folderName', separator: QUICK_TOGGLE_FOLDER_SEPARATOR },
+];
+
 /**
- * 그룹 이름을 태그와 표시용 이름으로 나눈다.
- * "강도::약" → { setName: '강도', label: '약' }
- * "약"          → { setName: '', label: '약' }
+ * 그룹 이름을 접두사와 표시용 이름으로 나눈다.
+ * "강도::약"        → { setName: '강도', folderName: '',     label: '약' }
+ * "연출>>조명"      → { setName: '',     folderName: '연출', label: '조명' }
+ * "연출>>강도::약"  → { setName: '강도', folderName: '연출', label: '약' }
+ * "약"              → { setName: '',     folderName: '',     label: '약' }
+ * 접두사 순서는 강제하지 않는다. 손으로 "강도::연출>>약"이라고 적어도 같게 읽힌다.
  * @param {string} fullName
- * @returns {{setName: string, label: string}}
+ * @returns {{setName: string, folderName: string, label: string}}
  */
 function parseGroupKey(fullName) {
-    const raw = String(fullName || '');
-    const index = raw.indexOf(QUICK_TOGGLE_SET_SEPARATOR);
-    if (index <= 0) return { setName: '', label: raw.trim() };
+    const parsed = { setName: '', folderName: '', label: String(fullName || '').trim() };
 
-    const setName = raw.slice(0, index).trim();
-    const label = raw.slice(index + QUICK_TOGGLE_SET_SEPARATOR.length).trim();
-    // 어느 한쪽이 비면 태그로 보지 않고 이름 그대로 쓴다.
-    if (!setName || !label) return { setName: '', label: raw.trim() };
-    return { setName, label };
+    // 앞에서부터 접두사를 하나씩 벗겨낸다. 같은 종류를 두 번 벗기지는 않는다.
+    for (let round = 0; round < CONTAINER_SEPARATORS.length; round++) {
+        let found = null;
+        for (const entry of CONTAINER_SEPARATORS) {
+            if (parsed[entry.field]) continue;
+            const index = parsed.label.indexOf(entry.separator);
+            if (index <= 0) continue;
+            if (!found || index < found.index) found = { entry, index };
+        }
+        if (!found) break;
+
+        const name = parsed.label.slice(0, found.index).trim();
+        const rest = parsed.label.slice(found.index + found.entry.separator.length).trim();
+        // 어느 한쪽이 비면 접두사로 보지 않고 남은 문자열을 이름 그대로 쓴다.
+        if (!name || !rest) break;
+
+        parsed[found.entry.field] = name;
+        parsed.label = rest;
+    }
+
+    return parsed;
 }
 
 /**
- * 세트와 이름을 그룹 이름 하나로 합친다.
- * @param {string} setName
- * @param {string} label
+ * 접두사와 표시 이름을 그룹 이름 하나로 합친다. 항상 "폴더>>태그::이름" 순서로 적는다.
+ * @param {{setName?: string, folderName?: string, label: string}} parts
  * @returns {string}
  */
-function buildGroupKey(setName, label) {
-    return setName ? `${setName}${QUICK_TOGGLE_SET_SEPARATOR}${label}` : label;
+function buildGroupKey(parts) {
+    let key = parts.label;
+    if (parts.setName) key = `${parts.setName}${QUICK_TOGGLE_SET_SEPARATOR}${key}`;
+    if (parts.folderName) key = `${parts.folderName}${QUICK_TOGGLE_FOLDER_SEPARATOR}${key}`;
+    return key;
 }
 
 function getLinkedQuickToggleGroups(preset) {
@@ -376,8 +403,8 @@ function applyQuickToggleGroupModel(preset, initialModel, nextModel) {
 }
 
 /**
- * 그룹 이름/태그 이름에 쓸 수 없는 문자 검사.
- * 쉼표는 그룹 구분자, "::"는 세트 구분자라 이름 안에 들어갈 수 없다.
+ * 그룹 이름/묶음 이름에 쓸 수 없는 문자 검사.
+ * 쉼표는 그룹 구분자, "::"는 세트 구분자, ">>"는 폴더 구분자라 이름 안에 들어갈 수 없다.
  * @returns {boolean} 사용 가능하면 true
  */
 function isValidGroupNamePart(name) {
@@ -389,18 +416,25 @@ function isValidGroupNamePart(name) {
         toastr.warning(L.toggleGroupNameSeparator);
         return false;
     }
+    if (name.includes(QUICK_TOGGLE_FOLDER_SEPARATOR)) {
+        toastr.warning(L.toggleGroupNameFolderSeparator);
+        return false;
+    }
     return true;
 }
 
 /**
  * 새 그룹 키를 만들고 중복을 검사한다.
+ * @param {{setName?: string, folderName?: string, label: string}} parts
+ * @param {Map<string, Set<string>>} model
+ * @param {string} previousKey
  * @returns {string} 그룹 키 (실패 시 빈 문자열)
  */
-function makeGroupKey(rawLabel, setName, model, previousKey = '') {
-    const label = String(rawLabel || '').trim();
+function makeGroupKey(parts, model, previousKey = '') {
+    const label = String(parts.label || '').trim();
     if (!label || !isValidGroupNamePart(label)) return '';
 
-    const key = buildGroupKey(setName, label);
+    const key = buildGroupKey({ ...parts, label });
     if (key !== previousKey && model.has(key)) {
         toastr.warning(L.toggleGroupNameExists);
         return '';
@@ -471,6 +505,7 @@ function showQuickToggleGroupModal() {
     desc.style.marginBottom = '10px';
     desc.style.opacity = '0.7';
     desc.style.fontSize = '0.9em';
+    desc.style.whiteSpace = 'pre-line';
 
     // ----- 좌: 그룹 목록 / 우: 멤버 선택 -----
     const body = document.createElement('div');
@@ -519,7 +554,7 @@ function showQuickToggleGroupModal() {
         }
 
         for (const [name, members] of model) {
-            const { setName, label } = parseGroupKey(name);
+            const { setName, folderName, label } = parseGroupKey(name);
             const row = document.createElement('div');
             row.className = 'custom_preset_group_row';
             if (name === selectedGroup) row.classList.add('selected');
@@ -534,6 +569,16 @@ function showQuickToggleGroupModal() {
             countSpan.textContent = L.toggleGroupMemberCount(members.size);
 
             row.appendChild(nameSpan);
+
+            // 태그와 폴더는 정하는 것이 달라서 같이 붙을 수 있다. 둘 다 있으면 둘 다 보여준다.
+            if (folderName) {
+                const folderBadge = document.createElement('span');
+                folderBadge.className = 'custom_preset_group_row_set custom_preset_group_row_folder';
+                folderBadge.innerHTML = '<i class="fa-solid fa-folder"></i> ';
+                folderBadge.append(folderName);
+                folderBadge.title = L.toggleGroupInFolder(folderName);
+                row.appendChild(folderBadge);
+            }
 
             if (setName) {
                 const setBadge = document.createElement('span');
@@ -637,7 +682,7 @@ function showQuickToggleGroupModal() {
     addBtn.innerHTML = `<i class="fa-solid fa-plus"></i> ${L.toggleGroupAdd}`;
     addBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const key = makeGroupKey(prompt(L.toggleGroupNewPrompt), '', model);
+        const key = makeGroupKey({ label: prompt(L.toggleGroupNewPrompt) }, model);
         if (!key) return;
         model.set(key, new Set());
         selectedGroup = key;
@@ -653,8 +698,9 @@ function showQuickToggleGroupModal() {
     renameBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!selectedGroup) return;
-        const { setName, label } = parseGroupKey(selectedGroup);
-        const key = makeGroupKey(prompt(L.toggleGroupRenamePrompt, label), setName, model, selectedGroup);
+        // 이름만 바꾸고 지금 붙어 있는 태그/폴더는 그대로 유지한다.
+        const parsed = parseGroupKey(selectedGroup);
+        const key = makeGroupKey({ ...parsed, label: prompt(L.toggleGroupRenamePrompt, parsed.label) }, model, selectedGroup);
         if (!key || key === selectedGroup) return;
 
         renameGroupKeyInPlace(model, selectedGroup, key);
@@ -663,6 +709,32 @@ function showQuickToggleGroupModal() {
         renderMembers();
     });
 
+    /**
+     * 선택한 그룹의 태그 또는 폴더를 다시 지정한다.
+     * 태그는 동작을, 폴더는 위치를 정하는 별개의 값이라 한쪽만 바꾸고 다른 쪽은 그대로 둔다.
+     * @param {string} field - 'setName' | 'folderName'
+     * @param {string} promptMessage
+     */
+    const assignContainer = (field, promptMessage) => {
+        if (!selectedGroup) return;
+        const parsed = parseGroupKey(selectedGroup);
+
+        const answer = prompt(promptMessage, parsed[field]);
+        if (answer === null) return;
+
+        // 빈 값으로 두면 그 접두사만 떼어낸다.
+        const next = answer.trim();
+        if (next && !isValidGroupNamePart(next)) return;
+
+        const key = makeGroupKey({ ...parsed, [field]: next }, model, selectedGroup);
+        if (!key || key === selectedGroup) return;
+
+        renameGroupKeyInPlace(model, selectedGroup, key);
+        selectedGroup = key;
+        renderGroups();
+        renderMembers();
+    };
+
     const setBtn = document.createElement('button');
     setBtn.type = 'button';
     setBtn.className = 'menu_button';
@@ -670,23 +742,17 @@ function showQuickToggleGroupModal() {
     setBtn.title = L.toggleGroupSetTitle;
     setBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (!selectedGroup) return;
-        const { setName, label } = parseGroupKey(selectedGroup);
+        assignContainer('setName', L.toggleGroupSetPrompt);
+    });
 
-        const answer = prompt(L.toggleGroupSetPrompt, setName);
-        if (answer === null) return;
-
-        // 빈 값으로 두면 태그를 떼어낸다.
-        const nextSet = answer.trim();
-        if (nextSet && !isValidGroupNamePart(nextSet)) return;
-
-        const key = makeGroupKey(label, nextSet, model, selectedGroup);
-        if (!key || key === selectedGroup) return;
-
-        renameGroupKeyInPlace(model, selectedGroup, key);
-        selectedGroup = key;
-        renderGroups();
-        renderMembers();
+    const folderBtn = document.createElement('button');
+    folderBtn.type = 'button';
+    folderBtn.className = 'menu_button';
+    folderBtn.innerHTML = '<i class="fa-solid fa-folder"></i>';
+    folderBtn.title = L.toggleGroupFolderTitle;
+    folderBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        assignContainer('folderName', L.toggleGroupFolderPrompt);
     });
 
     const deleteBtn = document.createElement('button');
@@ -707,6 +773,7 @@ function showQuickToggleGroupModal() {
     groupActions.appendChild(addBtn);
     groupActions.appendChild(renameBtn);
     groupActions.appendChild(setBtn);
+    groupActions.appendChild(folderBtn);
     groupActions.appendChild(deleteBtn);
 
     groupPane.appendChild(groupPaneLabel);
@@ -860,17 +927,337 @@ function updateQuickToggleCollapseButtonState(hasQuickPrompts) {
     }
 }
 
-export function renderQuickToggleButtons() {
+// ========== 폴더 (버튼 하나에 접히는 묶음) ==========
+
+// 열려 있는 폴더 메뉴는 하나뿐이다.
+/**@type {{name: string, root: HTMLElement, refresh: () => void}|null}*/
+let openFolderMenu = null;
+
+function closeQuickToggleFolderMenu() {
+    if (!openFolderMenu) return;
+    window.removeEventListener('resize', closeQuickToggleFolderMenu);
+    openFolderMenu.root.remove();
+    openFolderMenu = null;
+}
+
+/**
+ * 폴더 메뉴를 버튼 위(자리가 없으면 아래)에 붙인다.
+ * 바가 화면 아래쪽에 있으므로 기본은 위로 띄운다.
+ */
+function positionQuickToggleFolderMenu(menu, anchor) {
+    if (!anchor?.isConnected) return;
+    const rect = anchor.getBoundingClientRect();
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    let top = rect.top - height - 6;
+    if (top < 8) top = Math.min(rect.bottom + 6, window.innerHeight - height - 8);
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+}
+
+function findQuickToggleFolderButton(folderName) {
+    const bar = document.getElementById('custom_preset_quick_toggle_bar');
+    return bar?.querySelector(`[data-quick-toggle-folder="${CSS.escape(folderName)}"]`) || null;
+}
+
+/**
+ * 폴더 안 그룹 전체를 한 번에 켜거나 끈다.
+ * 끌 때는 폴더 밖에서 아직 켜져 있는 그룹이 쓰는 프롬프트를 남긴다. (그룹 버튼 하나를 끌 때와 같은 규칙)
+ * @returns {boolean} 실제로 바뀐 것이 있으면 true
+ */
+function setQuickToggleFolderEnabled(preset, folderGroups, allGroups, enabled) {
+    const promptOrderEntry = preset?.prompt_order?.find(entry => entry.character_id === GLOBAL_PROMPT_CHARACTER_ID);
+    if (!promptOrderEntry?.order) return false;
+
+    const own = new Set();
+    for (const group of folderGroups) {
+        for (const identifier of group.identifiers) own.add(identifier);
+    }
+
+    let targets = own;
+    if (!enabled) {
+        const insideFolder = new Set(folderGroups.map(group => group.name));
+        const held = new Set();
+        for (const other of allGroups) {
+            if (insideFolder.has(other.name) || other.state !== 'on') continue;
+            for (const identifier of other.identifiers) held.add(identifier);
+        }
+        targets = new Set(Array.from(own).filter(identifier => !held.has(identifier)));
+    }
+    if (targets.size === 0) return false;
+
+    let changed = false;
+    for (const item of promptOrderEntry.order) {
+        if (!targets.has(item.identifier) || !!item.enabled === enabled) continue;
+        item.enabled = enabled;
+        changed = true;
+    }
+    if (!changed) return false;
+
+    promptManager?.saveServiceSettings?.();
+    promptManager?.render?.();
+    return true;
+}
+
+/**
+ * 폴더에서 "모두 켜기"로 실제로 켤 그룹들.
+ * 같은 태그끼리는 하나만 켜질 수 있으므로 태그마다 하나씩만 고른다.
+ * 이미 켜진 멤버가 있으면 그것을 두고, 없으면 첫 멤버를 켠다.
+ * @returns {object[]}
+ */
+function pickFolderGroupsToEnable(folderGroups) {
+    const picked = [];
+    const bySet = new Map();
+
+    for (const group of folderGroups) {
+        if (!group.setName) {
+            picked.push(group);
+            continue;
+        }
+        if (!bySet.has(group.setName)) bySet.set(group.setName, []);
+        bySet.get(group.setName).push(group);
+    }
+
+    for (const members of bySet.values()) {
+        picked.push(members.find(group => group.state !== 'off') || members[0]);
+    }
+    return picked;
+}
+
+const FOLDER_MENU_STATE_ICONS = {
+    on: 'fa-solid fa-square-check',
+    partial: 'fa-solid fa-square-minus',
+    off: 'fa-regular fa-square',
+};
+
+function showQuickToggleFolderMenu(folderName) {
+    closeQuickToggleFolderMenu();
+
+    // 바깥 아무 데나 눌러 닫는 투명 레이어. ST의 바깥클릭 처리로 이벤트가 새지 않게 막는다.
+    const root = document.createElement('div');
+    root.className = 'custom_preset_quick_toggle_folder_blocker';
+
+    const menu = document.createElement('div');
+    menu.className = 'custom_preset_quick_toggle_folder_menu';
+    root.appendChild(menu);
+
+    /** 메뉴는 열어둔 채로 항목 상태만 다시 그린다. (폴더는 여러 개를 연달아 켜고 끄는 것이 목적) */
+    const refresh = () => {
+        const preset = getActivePromptManagerPreset();
+        const allGroups = getLinkedQuickToggleGroups(preset);
+        const folderGroups = allGroups.filter(group => group.folderName === folderName);
+        if (folderGroups.length === 0) {
+            closeQuickToggleFolderMenu();
+            return;
+        }
+
+        menu.innerHTML = '';
+
+        const header = document.createElement('div');
+        header.className = 'custom_preset_quick_toggle_folder_menu_header';
+
+        const headerName = document.createElement('span');
+        headerName.className = 'custom_preset_quick_toggle_folder_menu_title';
+        headerName.textContent = folderName;
+        header.appendChild(headerName);
+
+        // 태그가 섞인 폴더는 전부 켜질 수가 없으므로, "켤 수 있는 것이 다 켜졌는지"로 판단한다.
+        const allEnabled = pickFolderGroupsToEnable(folderGroups).every(group => group.state === 'on');
+        const bulkBtn = document.createElement('button');
+        bulkBtn.type = 'button';
+        bulkBtn.className = 'menu_button custom_preset_quick_toggle_folder_bulk';
+        bulkBtn.textContent = allEnabled ? L.toggleFolderAllOff : L.toggleFolderAllOn;
+        bulkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const activePreset = getActivePromptManagerPreset();
+            const groups = getLinkedQuickToggleGroups(activePreset);
+            const inFolder = groups.filter(group => group.folderName === folderName);
+            // 끌 때는 폴더 전체를, 켤 때는 태그마다 하나씩만.
+            const targets = allEnabled ? inFolder : pickFolderGroupsToEnable(inFolder);
+            if (!setQuickToggleFolderEnabled(activePreset, targets, groups, !allEnabled)) {
+                toastr.info(L.toggleFolderNothingToChange);
+                return;
+            }
+            renderQuickToggleButtons({ keepFolderMenu: true });
+            refresh();
+        });
+        header.appendChild(bulkBtn);
+        menu.appendChild(header);
+
+        for (const group of folderGroups) {
+            const row = document.createElement('div');
+            row.className = 'custom_preset_quick_toggle_folder_menu_item';
+            if (group.state === 'off') row.classList.add('is_off');
+
+            const icon = document.createElement('i');
+            icon.className = `${FOLDER_MENU_STATE_ICONS[group.state]} custom_preset_quick_toggle_folder_menu_icon`;
+
+            const label = document.createElement('span');
+            label.className = 'custom_preset_quick_toggle_folder_menu_label';
+            label.textContent = group.label;
+
+            const memberNames = group.prompts.map(p => p.name).join(', ');
+            const lines = [group.state === 'partial'
+                ? L.toggleGroupPartial(memberNames, group.enabledCount, group.identifiers.length)
+                : L.togglePrompt(memberNames)];
+            // 폴더 안에도 태그가 붙어 있을 수 있다. 옆 항목이 왜 같이 꺼지는지 알 수 있게 알려준다.
+            if (group.setName) lines.push(L.toggleGroupInSet(group.setName));
+            row.title = lines.join('\n');
+
+            row.append(icon, label);
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const activePreset = getActivePromptManagerPreset();
+                const groups = getLinkedQuickToggleGroups(activePreset);
+                const target = groups.find(g => g.name === group.name);
+                if (!target) {
+                    refresh();
+                    return;
+                }
+                toggleQuickToggleGroup(activePreset, target, groups);
+                renderQuickToggleButtons({ keepFolderMenu: true });
+                refresh();
+            });
+            menu.appendChild(row);
+        }
+
+        // 바가 다시 그려지면서 줄바꿈이 바뀔 수 있으므로 매번 버튼을 다시 찾아 붙인다.
+        positionQuickToggleFolderMenu(menu, findQuickToggleFolderButton(folderName));
+    };
+
+    root.addEventListener('click', (e) => {
+        if (e.target === root) closeQuickToggleFolderMenu();
+    });
+    // ST의 바깥클릭 처리로 이벤트가 새어나가지 않게 막는다.
+    // 항목 클릭은 각자 stopPropagation 하지만, 여백을 눌렀을 때를 위해 메뉴 전체에도 걸어둔다.
+    const stopAll = (e) => e.stopPropagation();
+    for (const evt of ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
+        root.addEventListener(evt, stopAll);
+    }
+    menu.addEventListener('click', stopAll);
+
+    document.body.appendChild(root);
+    openFolderMenu = { name: folderName, root, refresh };
+    // 열려 있는 동안 화면 크기가 바뀌면 위치가 어긋난다. 다시 잡기보다 닫는 편이 덜 놀랍다.
+    // refresh()가 빈 폴더를 발견하고 바로 닫을 수 있으므로 먼저 걸어둬야 리스너가 남지 않는다.
+    window.addEventListener('resize', closeQuickToggleFolderMenu);
+    refresh();
+}
+
+function toggleQuickToggleFolderMenu(folderName) {
+    if (openFolderMenu?.name === folderName) {
+        closeQuickToggleFolderMenu();
+        return;
+    }
+    showQuickToggleFolderMenu(folderName);
+}
+
+// ========== 바 렌더링 ==========
+
+function createQuickToggleGroupButton(group) {
+    const { prompts, identifiers, state, enabledCount, label, setName } = group;
+    const button = document.createElement('button');
+    button.className = 'menu_button custom_preset_quick_toggle_button';
+    if (state === 'off') button.classList.add('is_disabled');
+    if (state === 'partial') button.classList.add('is_partial');
+    // 묶음 이름이 붙어 있으면 그것은 빼고 표시한다. ("강도::약" → "약")
+    button.textContent = label;
+
+    const memberNames = prompts.map(p => p.name).join(', ');
+    const lines = [state === 'partial'
+        ? L.toggleGroupPartial(memberNames, enabledCount, identifiers.length)
+        : L.togglePrompt(memberNames)];
+    if (setName) lines.push(L.toggleGroupInSet(setName));
+    button.title = lines.join('\n');
+
+    button.addEventListener('click', () => {
+        const activePreset = getActivePromptManagerPreset();
+        const groups = getLinkedQuickToggleGroups(activePreset);
+        const target = groups.find(g => g.name === group.name) || group;
+        toggleQuickToggleGroup(activePreset, target, groups);
+        renderQuickToggleButtons();
+    });
+    return button;
+}
+
+function createQuickToggleFolderButton(folder) {
+    const onCount = folder.groups.filter(group => group.state === 'on').length;
+    const hasPartial = folder.groups.some(group => group.state === 'partial');
+
+    const button = document.createElement('button');
+    button.className = 'menu_button custom_preset_quick_toggle_button custom_preset_quick_toggle_folder_button';
+    button.dataset.quickToggleFolder = folder.name;
+    // 안이 전부 꺼져 있으면 흐리게, 반쯤 켜진 그룹이 섞여 있으면 그룹 버튼과 같은 점선 테두리로 알린다.
+    if (onCount === 0 && !hasPartial) button.classList.add('is_disabled');
+    if (hasPartial) button.classList.add('is_partial');
+
+    const label = document.createElement('span');
+    label.className = 'custom_preset_quick_toggle_folder_button_label';
+    label.textContent = folder.name;
+
+    const count = document.createElement('span');
+    count.className = 'custom_preset_quick_toggle_folder_button_count';
+    count.textContent = `${onCount}/${folder.groups.length}`;
+
+    const caret = document.createElement('i');
+    caret.className = 'fa-solid fa-caret-down custom_preset_quick_toggle_folder_button_caret';
+
+    button.append(label, count, caret);
+    button.title = L.toggleFolderButtonTitle(folder.name, onCount, folder.groups.length);
+    button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleQuickToggleFolderMenu(folder.name);
+    });
+    return button;
+}
+
+/**
+ * 그룹 목록을 바에 놓을 순서대로 정리한다.
+ * 폴더는 첫 멤버가 있던 자리를 그대로 차지하므로 기존 버튼 순서가 흐트러지지 않는다.
+ * @returns {({type: 'group', group: object}|{type: 'folder', name: string, groups: object[]})[]}
+ */
+function buildQuickToggleBarItems(groups) {
+    const items = [];
+    const folders = new Map();
+
+    for (const group of groups) {
+        if (!group.folderName) {
+            items.push({ type: 'group', group });
+            continue;
+        }
+        if (!folders.has(group.folderName)) {
+            const folder = { type: 'folder', name: group.folderName, groups: [] };
+            folders.set(group.folderName, folder);
+            items.push(folder);
+        }
+        folders.get(group.folderName).groups.push(group);
+    }
+
+    return items;
+}
+
+/**
+ * @param {{keepFolderMenu?: boolean}} [options] - 폴더 메뉴에서 항목을 누른 경우처럼
+ *   메뉴를 열어둔 채 바만 다시 그려야 할 때 true. 이벤트 핸들러로 직접 넘어오는 경우를 위해 기본값은 false다.
+ */
+export function renderQuickToggleButtons(options) {
+    if (!options?.keepFolderMenu) closeQuickToggleFolderMenu();
+
     const existingBar = document.getElementById('custom_preset_quick_toggle_bar');
     if (existingBar) existingBar.remove();
 
     if (!isQuickToggleFeatureEnabled()) {
+        closeQuickToggleFolderMenu();
         updateQuickToggleCollapseButtonState(false);
         return;
     }
 
     const sendForm = document.getElementById('send_form');
     if (!sendForm) {
+        closeQuickToggleFolderMenu();
         updateQuickToggleCollapseButtonState(false);
         return;
     }
@@ -878,11 +1265,14 @@ export function renderQuickToggleButtons() {
     const preset = getActivePromptManagerPreset();
     const quickToggleGroups = getLinkedQuickToggleGroups(preset);
     if (quickToggleGroups.length === 0) {
+        closeQuickToggleFolderMenu();
         updateQuickToggleCollapseButtonState(false);
         return;
     }
 
     const collapsed = isQuickToggleCollapseFeatureEnabled() ? isQuickToggleBarCollapsed() : false;
+    // 바를 접으면 폴더 메뉴만 떠 있을 곳이 없다.
+    if (collapsed) closeQuickToggleFolderMenu();
 
     const bar = document.createElement('div');
     bar.id = 'custom_preset_quick_toggle_bar';
@@ -890,31 +1280,11 @@ export function renderQuickToggleButtons() {
         ? 'custom_preset_quick_toggle_bar-collapsed'
         : 'custom_preset_quick_toggle_bar-expanded'}`;
 
-    quickToggleGroups.forEach((group) => {
-        const { prompts, identifiers, state, enabledCount, label, setName } = group;
-        const button = document.createElement('button');
-        button.className = 'menu_button custom_preset_quick_toggle_button';
-        if (state === 'off') button.classList.add('is_disabled');
-        if (state === 'partial') button.classList.add('is_partial');
-        // 태그가 붙어 있으면 태그는 빼고 표시한다. ("강도::약" → "약")
-        button.textContent = label;
-
-        const memberNames = prompts.map(p => p.name).join(', ');
-        const lines = [state === 'partial'
-            ? L.toggleGroupPartial(memberNames, enabledCount, identifiers.length)
-            : L.togglePrompt(memberNames)];
-        if (setName) lines.push(L.toggleGroupInSet(setName));
-        button.title = lines.join('\n');
-
-        button.addEventListener('click', () => {
-            const activePreset = getActivePromptManagerPreset();
-            const groups = getLinkedQuickToggleGroups(activePreset);
-            const target = groups.find(g => g.name === group.name) || group;
-            toggleQuickToggleGroup(activePreset, target, groups);
-            renderQuickToggleButtons();
-        });
-        bar.appendChild(button);
-    });
+    for (const item of buildQuickToggleBarItems(quickToggleGroups)) {
+        bar.appendChild(item.type === 'folder'
+            ? createQuickToggleFolderButton(item)
+            : createQuickToggleGroupButton(item.group));
+    }
     updateQuickToggleCollapseButtonState(true);
 
     const qrBar = document.getElementById('qr--bar');
