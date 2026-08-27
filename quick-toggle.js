@@ -84,11 +84,26 @@ export function ensureQuickTogglePopupControls() {
     quickHint.style.opacity = '0.6';
     quickHint.style.marginTop = '3px';
     quickHint.style.display = 'block';
-    quickHint.style.whiteSpace = 'pre-line';
+
+    // 고급 문법 설명은 길다. 펼쳐두면 그만큼 프롬프트 입력칸이 밀려 올라가므로 접어둔다.
+    const quickHintAdvanced = document.createElement('details');
+    quickHintAdvanced.id = 'custom_preset_quick_toggle_hint_advanced';
+    quickHintAdvanced.className = 'custom_preset_hint_details';
+
+    const quickHintSummary = document.createElement('summary');
+    quickHintSummary.textContent = L.toggleButtonNameHintAdvancedLabel;
+
+    const quickHintBody = document.createElement('div');
+    quickHintBody.className = 'custom_preset_hint_details_body';
+    quickHintBody.textContent = L.toggleButtonNameHintAdvanced;
+
+    quickHintAdvanced.appendChild(quickHintSummary);
+    quickHintAdvanced.appendChild(quickHintBody);
 
     quickBlock.appendChild(title);
     quickBlock.appendChild(row);
     quickBlock.appendChild(quickHint);
+    quickBlock.appendChild(quickHintAdvanced);
 
     // Position select block
     const positionBlock = document.createElement('div');
@@ -455,6 +470,155 @@ function renameGroupKeyInPlace(model, oldKey, newKey) {
     for (const [key, members] of renamed) model.set(key, members);
 }
 
+/**
+ * 폴더/태그 이름을 고르는 작은 창.
+ * 이미 쓰고 있는 이름을 눌러 고르게 해서, 타자 오타로 같은 묶음이 둘로 갈라지는 것을 막는다.
+ * @param {{title: string, desc: string, noneLabel: string, names: string[], current: string, onPick: (name: string) => void}} options
+ */
+function showQuickToggleNamePickerModal(options) {
+    const overlay = document.createElement('div');
+    overlay.className = 'custom_preset_position_modal_overlay custom_preset_name_picker_overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'custom_preset_position_modal custom_preset_name_picker_modal';
+
+    // 다른 모달과 같은 방식으로 JS가 위치를 잡는다. 키보드가 올라올 때 좌우로 흔들리지 않게 가로는 한 번만 계산한다.
+    let lastViewWidth = -1;
+    const positionModal = () => {
+        modal.style.top = Math.max(10, (window.innerHeight - modal.offsetHeight) / 2) + 'px';
+        const viewWidth = window.innerWidth;
+        if (viewWidth === lastViewWidth) return;
+        lastViewWidth = viewWidth;
+        modal.style.left = Math.max(10, (viewWidth - modal.offsetWidth) / 2) + 'px';
+    };
+
+    const removeModal = () => {
+        window.removeEventListener('resize', positionModal);
+        window.visualViewport?.removeEventListener('resize', positionModal);
+        overlay.remove();
+        modal.remove();
+    };
+
+    const pick = (name) => {
+        removeModal();
+        options.onPick(name);
+    };
+
+    const title = document.createElement('h3');
+    title.textContent = options.title;
+    title.style.marginBottom = '8px';
+
+    const desc = document.createElement('p');
+    desc.textContent = options.desc;
+    desc.style.marginBottom = '10px';
+    desc.style.opacity = '0.7';
+    desc.style.fontSize = '0.9em';
+
+    const list = document.createElement('div');
+    list.className = 'custom_preset_name_picker_list';
+
+    const addRow = (label, value, isNone) => {
+        const row = document.createElement('div');
+        row.className = 'custom_preset_name_picker_row';
+        if (isNone) row.classList.add('is_none');
+
+        const text = document.createElement('span');
+        text.className = 'custom_preset_name_picker_row_name';
+        text.textContent = label;
+        row.appendChild(text);
+
+        if (value === options.current) {
+            row.classList.add('selected');
+            const check = document.createElement('i');
+            check.className = 'fa-solid fa-check';
+            row.appendChild(check);
+        }
+
+        row.addEventListener('click', (e) => {
+            e.stopPropagation();
+            pick(value);
+        });
+        list.appendChild(row);
+    };
+
+    addRow(options.noneLabel, '', true);
+    for (const name of options.names) addRow(name, name, false);
+
+    if (options.names.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'custom_preset_empty_message';
+        empty.textContent = L.toggleGroupPickEmpty;
+        list.appendChild(empty);
+    }
+
+    const newRow = document.createElement('div');
+    newRow.className = 'custom_preset_name_picker_new';
+
+    const input = document.createElement('input');
+    input.className = 'text_pole';
+    input.type = 'text';
+    input.placeholder = L.toggleGroupPickNewPlaceholder;
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'menu_button';
+    addBtn.textContent = L.toggleGroupPickAdd;
+
+    const submitNew = () => {
+        const typed = input.value.trim();
+        if (!typed || !isValidGroupNamePart(typed)) return;
+        // 대소문자는 구분한다. "Staging"과 "staging"은 서로 다른 이름으로 둔다.
+        pick(typed);
+    };
+
+    addBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        submitNew();
+    });
+    input.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        submitNew();
+    });
+
+    newRow.appendChild(input);
+    newRow.appendChild(addBtn);
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'custom_preset_group_footer';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'menu_button';
+    cancelBtn.textContent = L.cancel;
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeModal();
+    });
+    btnRow.appendChild(cancelBtn);
+
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(list);
+    modal.appendChild(newRow);
+    modal.appendChild(btnRow);
+
+    // 아래에 깔린 그룹 관리창의 바깥클릭 처리로 이벤트가 새지 않게 막는다.
+    const stopAll = (e) => e.stopPropagation();
+    for (const evt of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
+        modal.addEventListener(evt, stopAll);
+        overlay.addEventListener(evt, stopAll);
+    }
+    overlay.addEventListener('click', () => removeModal());
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(positionModal);
+    window.addEventListener('resize', positionModal);
+    window.visualViewport?.addEventListener('resize', positionModal);
+}
+
 function showQuickToggleGroupModal() {
     const preset = getActivePromptManagerPreset();
     const allPrompts = getOrderedPrompts(preset);
@@ -712,27 +876,37 @@ function showQuickToggleGroupModal() {
     /**
      * 선택한 그룹의 태그 또는 폴더를 다시 지정한다.
      * 태그는 동작을, 폴더는 위치를 정하는 별개의 값이라 한쪽만 바꾸고 다른 쪽은 그대로 둔다.
+     * 이름은 직접 치는 대신 이미 쓰고 있는 것 중에서 고르게 한다. (오타로 묶음이 갈라지는 것 방지)
      * @param {string} field - 'setName' | 'folderName'
-     * @param {string} promptMessage
      */
-    const assignContainer = (field, promptMessage) => {
+    const assignContainer = (field) => {
         if (!selectedGroup) return;
         const parsed = parseGroupKey(selectedGroup);
+        const isFolder = field === 'folderName';
 
-        const answer = prompt(promptMessage, parsed[field]);
-        if (answer === null) return;
+        // 저장 전 편집분까지 반영되도록 관리창의 편집용 모델에서 이름을 모은다.
+        const names = [];
+        for (const key of model.keys()) {
+            const name = parseGroupKey(key)[field];
+            if (name && !names.includes(name)) names.push(name);
+        }
 
-        // 빈 값으로 두면 그 접두사만 떼어낸다.
-        const next = answer.trim();
-        if (next && !isValidGroupNamePart(next)) return;
+        showQuickToggleNamePickerModal({
+            title: isFolder ? L.toggleGroupPickFolderTitle : L.toggleGroupPickSetTitle,
+            desc: isFolder ? L.toggleGroupPickFolderDesc : L.toggleGroupPickSetDesc,
+            noneLabel: isFolder ? L.toggleGroupPickNoFolder : L.toggleGroupPickNoSet,
+            names,
+            current: parsed[field],
+            onPick: (next) => {
+                const key = makeGroupKey({ ...parsed, [field]: next }, model, selectedGroup);
+                if (!key || key === selectedGroup) return;
 
-        const key = makeGroupKey({ ...parsed, [field]: next }, model, selectedGroup);
-        if (!key || key === selectedGroup) return;
-
-        renameGroupKeyInPlace(model, selectedGroup, key);
-        selectedGroup = key;
-        renderGroups();
-        renderMembers();
+                renameGroupKeyInPlace(model, selectedGroup, key);
+                selectedGroup = key;
+                renderGroups();
+                renderMembers();
+            },
+        });
     };
 
     const setBtn = document.createElement('button');
@@ -742,7 +916,7 @@ function showQuickToggleGroupModal() {
     setBtn.title = L.toggleGroupSetTitle;
     setBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        assignContainer('setName', L.toggleGroupSetPrompt);
+        assignContainer('setName');
     });
 
     const folderBtn = document.createElement('button');
@@ -752,7 +926,7 @@ function showQuickToggleGroupModal() {
     folderBtn.title = L.toggleGroupFolderTitle;
     folderBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        assignContainer('folderName', L.toggleGroupFolderPrompt);
+        assignContainer('folderName');
     });
 
     const deleteBtn = document.createElement('button');

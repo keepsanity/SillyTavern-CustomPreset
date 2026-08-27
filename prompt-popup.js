@@ -8,7 +8,6 @@ import { loadPositionSelectForPrompt, movePromptToPosition } from './prompt-posi
 import { applyQuickToggleDataToPrompt, ensureQuickTogglePopupControls, isQuickToggleFeatureEnabled, isQuickToggleGroupFeatureEnabled, readQuickToggleForm } from './quick-toggle.js';
 import { getFeatureSettings } from './settings-store.js';
 import { ensureTranslateButtonInPopup } from './translate.js';
-import { L } from './translations.js';
 
 let quickPopupObserver = null;
 
@@ -35,12 +34,11 @@ export function loadQuickToggleFormForPrompt(promptId) {
 
     quickBlock.style.display = isQuickToggleFeatureEnabled() ? '' : 'none';
 
-    // 고급 문법 안내는 그룹 기능을 켠 사람에게만 보여준다.
-    const quickHint = document.getElementById('custom_preset_quick_toggle_hint');
-    if (quickHint) {
-        quickHint.textContent = isQuickToggleGroupFeatureEnabled()
-            ? `${L.toggleButtonNameHint}\n${L.toggleButtonNameHintAdvanced}`
-            : L.toggleButtonNameHint;
+    // 고급 문법 안내는 그룹 기능을 켠 사람에게만 보여주고, 열 때마다 접힌 상태로 되돌린다.
+    const quickHintAdvanced = document.getElementById('custom_preset_quick_toggle_hint_advanced');
+    if (quickHintAdvanced) {
+        quickHintAdvanced.style.display = isQuickToggleGroupFeatureEnabled() ? '' : 'none';
+        quickHintAdvanced.open = false;
     }
 
     const prompt = promptManager?.getPromptById?.(promptId);

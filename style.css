@@ -1322,3 +1322,116 @@
         font-size: 1.05em;
     }
 }
+
+/* 접히는 도움말 (프롬프트 편집창의 고급 문법 안내) */
+.custom_preset_hint_details {
+    margin-top: 4px;
+    font-size: 0.85em;
+    opacity: 0.6;
+}
+
+.custom_preset_hint_details > summary {
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    user-select: none;
+}
+
+.custom_preset_hint_details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.custom_preset_hint_details > summary::before {
+    content: '\25B8';
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.custom_preset_hint_details[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.custom_preset_hint_details_body {
+    white-space: pre-line;
+    margin-top: 3px;
+    padding-left: 10px;
+    border-left: 1px solid var(--SmartThemeBorderColor);
+}
+
+/* ----- 폴더/태그 이름 선택 창 (그룹 관리창 위에 뜬다) ----- */
+.custom_preset_name_picker_overlay {
+    z-index: 10010;
+}
+
+.custom_preset_name_picker_modal {
+    z-index: 10011;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+}
+
+.custom_preset_name_picker_list {
+    max-height: 40vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    padding: 4px;
+}
+
+.custom_preset_name_picker_row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.custom_preset_name_picker_row:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.custom_preset_name_picker_row.selected {
+    background-color: rgba(255, 255, 255, 0.14);
+    outline: 1px solid var(--SmartThemeBorderColor);
+}
+
+/* "없음" 줄은 실제 이름이 아니라 해제 동작이라 구분해 둔다 */
+.custom_preset_name_picker_row.is_none {
+    font-style: italic;
+    opacity: 0.75;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 4px 4px 0 0;
+    margin-bottom: 3px;
+}
+
+.custom_preset_name_picker_row_name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom_preset_name_picker_new {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.custom_preset_name_picker_new input {
+    flex: 1;
+    min-width: 0;
+}
+
+.custom_preset_name_picker_new .menu_button {
+    flex-shrink: 0;
+    width: auto !important;
+    white-space: nowrap;
+    margin: 0;
+}
