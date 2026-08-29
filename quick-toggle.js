@@ -1104,13 +1104,15 @@ function updateQuickToggleCollapseButtonState(hasQuickPrompts) {
 // ========== 폴더 (버튼 하나에 접히는 묶음) ==========
 
 // 열려 있는 폴더 메뉴는 하나뿐이다.
-/**@type {{name: string, root: HTMLElement, refresh: () => void}|null}*/
+/**@type {{name: string, menu: HTMLElement, refresh: () => void, closeOnOutside: (e: Event) => void}|null}*/
 let openFolderMenu = null;
 
 function closeQuickToggleFolderMenu() {
     if (!openFolderMenu) return;
     window.removeEventListener('resize', closeQuickToggleFolderMenu);
-    openFolderMenu.root.remove();
+    document.removeEventListener('pointerdown', openFolderMenu.closeOnOutside, true);
+    document.removeEventListener('mousedown', openFolderMenu.closeOnOutside, true);
+    openFolderMenu.menu.remove();
     openFolderMenu = null;
 }
 
@@ -1210,13 +1212,14 @@ const FOLDER_MENU_STATE_ICONS = {
 function showQuickToggleFolderMenu(folderName) {
     closeQuickToggleFolderMenu();
 
-    // 바깥 아무 데나 눌러 닫는 투명 레이어. ST의 바깥클릭 처리로 이벤트가 새지 않게 막는다.
-    const root = document.createElement('div');
-    root.className = 'custom_preset_quick_toggle_folder_blocker';
-
     const menu = document.createElement('div');
     menu.className = 'custom_preset_quick_toggle_folder_menu';
-    root.appendChild(menu);
+    // 메뉴 안 클릭은 바깥 클릭으로 오인해 닫히지 않게 막고,
+    // ST의 다른 바깥클릭 처리로도 새지 않게 막는다.
+    const stopAll = (e) => e.stopPropagation();
+    for (const evt of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
+        menu.addEventListener(evt, stopAll);
+    }
 
     /** 메뉴는 열어둔 채로 항목 상태만 다시 그린다. (폴더는 여러 개를 연달아 켜고 끄는 것이 목적) */
     const refresh = () => {
@@ -1302,19 +1305,23 @@ function showQuickToggleFolderMenu(folderName) {
         positionQuickToggleFolderMenu(menu, findQuickToggleFolderButton(folderName));
     };
 
-    root.addEventListener('click', (e) => {
-        if (e.target === root) closeQuickToggleFolderMenu();
-    });
-    // ST의 바깥클릭 처리로 이벤트가 새어나가지 않게 막는다.
-    // 항목 클릭은 각자 stopPropagation 하지만, 여백을 눌렀을 때를 위해 메뉴 전체에도 걸어둔다.
-    const stopAll = (e) => e.stopPropagation();
-    for (const evt of ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend']) {
-        root.addEventListener(evt, stopAll);
-    }
-    menu.addEventListener('click', stopAll);
+    // 화면 전체를 덮는 투명 레이어에 기대지 않는다. 완전히 투명한 요소는 일부 모바일 브라우저에서
+    // 탭 자체가 씹혀서 "바깥을 눌러도 안 닫히는" 문제가 생긴다. 대신 document에 캡처 단계로 걸어서,
+    // 그 좌표에 실제로 뭐가 그려져 있든 상관없이 메뉴 바깥을 눌렀는지 직접 판정한다.
+    const closeOnOutside = (e) => {
+        if (menu.contains(e.target)) return;
+        // 이 폴더 버튼 위라면 여기서 닫지 않는다. pointerdown이 click보다 먼저 오므로,
+        // 여기서 먼저 닫아버리면 뒤이은 click(toggleQuickToggleFolderMenu)이 "닫혀 있다"고
+        // 오판해 도로 열어버린다. 그 버튼의 클릭 핸들러가 열지 닫을지 직접 정하게 둔다.
+        const anchor = findQuickToggleFolderButton(folderName);
+        if (anchor?.contains(e.target)) return;
+        closeQuickToggleFolderMenu();
+    };
+    document.addEventListener('pointerdown', closeOnOutside, true);
+    document.addEventListener('mousedown', closeOnOutside, true);
 
-    document.body.appendChild(root);
-    openFolderMenu = { name: folderName, root, refresh };
+    document.body.appendChild(menu);
+    openFolderMenu = { name: folderName, menu, refresh, closeOnOutside };
     // 열려 있는 동안 화면 크기가 바뀌면 위치가 어긋난다. 다시 잡기보다 닫는 편이 덜 놀랍다.
     // refresh()가 빈 폴더를 발견하고 바로 닫을 수 있으므로 먼저 걸어둬야 리스너가 남지 않는다.
     window.addEventListener('resize', closeQuickToggleFolderMenu);
