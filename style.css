@@ -1429,3 +1429,45 @@
     white-space: nowrap;
     margin: 0;
 }
+
+/* Prompt Editor Word Search
+   기본은 접혀 있다. 편집창은 이미 빽빽해서 안 쓸 때 높이를 차지하면 안 된다.
+   ST의 .menu_button은 display:flex / width:min-content라 라벨 옆에 인라인으로 두려면 되돌려야 한다. */
+#custom_preset_prompt_search_toggle {
+    display: inline-flex;
+    margin: 0 0 0 6px;
+    padding: 2px 7px;
+    font-size: 0.85em;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.custom_preset_prompt_search_bar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    margin: 5px 0 0;
+}
+
+.custom_preset_prompt_search_input {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+
+.custom_preset_prompt_search_counter {
+    flex: 0 0 auto;
+    min-width: 3.5em;
+    text-align: center;
+    font-size: 0.85em;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.custom_preset_prompt_search_bar .custom_preset_prompt_search_btn {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 5px 8px;
+    line-height: 1;
+}

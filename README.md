@@ -28,6 +28,12 @@ A SillyTavern extension for managing and customizing prompt presets.
 - Advanced: the toggle name field accepts `Low, Mid, High` (comma = multiple groups) and
   `tag::name` (e.g. `level::Low`)
 
+### Find in Prompt
+- A magnifier next to the "Prompt" label opens a find bar right above the textarea
+- Shows the match count; Enter (or the arrows) jumps to the next match, Shift+Enter to the previous
+- Case-insensitive. The match is shown using the browser's own selection, so the textarea takes focus
+- Collapsed by default, and reset every time you open a different prompt
+
 ### Prompt Position
 - Choose where to insert a prompt when adding it via the "+" button
 - Change prompt position in the prompt editor (applied on save)
@@ -93,6 +99,7 @@ All features can be toggled in **Extensions > Custom Preset Manager**:
 | Enable Collapse Toggle | Show/hide the collapse button for the toggle bar |
 | Toggle Group (advanced) | Show the "Manage Groups" feature (off by default). Existing group buttons work either way |
 | Enable Position Select | Enable position selection when adding/editing prompts |
+| Show Find in Prompt | Show/hide the find button in the prompt editor |
 | Show Toggle Preset | Show/hide the toggle preset feature |
 | Show Linked Preset | Enable per-chat automatic preset switching |
 | Auto-save Preset | Automatically save the preset when saving a prompt edit |
@@ -132,6 +139,12 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 - 그룹끼리 프롬프트를 공유해도, 한 그룹을 꺼서 아직 켜져 있는 다른 그룹이 무너지지 않음
 - 그룹 구성은 프리셋 안에 저장되므로 프리셋을 공유하면 그룹도 그대로 따라감
 - 직접 입력: 토글 이름 칸에 `약, 중, 강`처럼 쉼표로 여러 그룹 지정, `태그::이름`(예: `강도::약`)으로 지정
+
+### 단어검색
+- "Prompt" 라벨 옆 돋보기를 누르면 입력칸 바로 위에 단어검색 바가 열림
+- 일치 개수를 표시하고, 엔터(또는 화살표)로 다음, Shift+엔터로 이전 일치로 이동
+- 대소문자는 구분하지 않음. 브라우저 기본 선택으로 표시하므로 이동하면 입력칸에 포커스가 감
+- 기본은 접혀 있고, 다른 프롬프트를 열면 초기화됨
 
 ### 프롬프트 위치 지정
 - "+" 버튼으로 프롬프트 추가 시 삽입 위치 선택 가능
@@ -196,6 +209,7 @@ SillyTavern용 프롬프트 프리셋 관리 확장 기능입니다.
 | 빠른 토글 접기기능 활성화 | 토글 바 접기/펼치기 버튼 표시 |
 | 토글 그룹 기능 (고급) | "그룹 관리" 기능 표시 (기본 꺼짐). 꺼도 이미 만든 그룹 버튼은 동작 |
 | 프롬프트 위치 정하기 | 프롬프트 추가/편집 시 위치 선택 기능 활성화 |
+| 단어검색 표시 | 프롬프트 편집창의 단어검색 버튼 표시/숨김 |
 | 토글 프리셋 표시 | 토글 프리셋 기능 표시/숨김 |
 | 연결 프리셋 표시 | 채팅방별 프리셋 자동 전환 기능 사용 |
 | 프롬프트 자동 저장 | 프롬프트 수정 저장 시 프리셋 자동 저장 |

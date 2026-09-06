@@ -5,6 +5,7 @@ import { promptManager } from '../../../openai.js';
 import { EXTENSION_NAME, QUICK_TOGGLE_ENABLED_KEY, QUICK_TOGGLE_NAME_KEY } from './constants.js';
 import { applyKeywordTriggerToPrompt, loadKeywordTriggerFormForPrompt, resetKeywordTriggerDraft } from './keyword-trigger.js';
 import { loadPositionSelectForPrompt, movePromptToPosition } from './prompt-position.js';
+import { ensurePromptSearchControls, resetPromptSearch } from './prompt-search.js';
 import { applyQuickToggleDataToPrompt, ensureQuickTogglePopupControls, isQuickToggleFeatureEnabled, isQuickToggleGroupFeatureEnabled, readQuickToggleForm } from './quick-toggle.js';
 import { getFeatureSettings } from './settings-store.js';
 import { ensureTranslateButtonInPopup } from './translate.js';
@@ -15,6 +16,10 @@ export function loadQuickToggleFormForPrompt(promptId) {
     ensureQuickTogglePopupControls();
     loadPositionSelectForPrompt(promptId);
     ensureTranslateButtonInPopup();
+
+    // 다른 프롬프트로 넘어갈 때마다 단어검색 바는 접힌 상태로 되돌린다.
+    ensurePromptSearchControls();
+    resetPromptSearch();
 
     // 키워드 칸 채우기는 이 함수 안에서 제일 마지막에, 그리고 격리해서 돌린다.
     // 앞쪽에 두면 여기서 난 예외가 빠른 토글 칸을 빈 채로 남겨 버린다.

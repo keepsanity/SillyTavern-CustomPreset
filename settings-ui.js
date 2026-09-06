@@ -6,6 +6,7 @@ import { closeCustomizerPanel } from './customizer-panel.js';
 import { ensureKeywordTriggerControls, getGlobalKeywordScanDepth, loadKeywordTriggerFormForPrompt, updateKeywordTriggerSummary } from './keyword-trigger.js';
 import { ensurePromptManagerPreviewButton, interceptEnabled, setInterceptEnabled } from './preview-intercept.js';
 import { loadQuickToggleFormForPrompt } from './prompt-popup.js';
+import { ensurePromptSearchControls } from './prompt-search.js';
 import { isQuickToggleGroupFeatureEnabled, renderQuickToggleButtons } from './quick-toggle.js';
 import { getFeatureSettings, saveFeatureSettings } from './settings-store.js';
 import { L } from './translations.js';
@@ -160,6 +161,29 @@ export function createExtensionSettingsMenu() {
 
     togglePosition.addEventListener('change', () => {
         settings.showPromptPositionFeature = !!togglePosition.checked;
+        saveFeatureSettings();
+        applyFeatureVisibility();
+    });
+
+    const rowSearch = document.createElement('label');
+    rowSearch.className = 'checkbox_label';
+    rowSearch.setAttribute('for', 'custom_preset_show_prompt_search_feature');
+    const togglePromptSearch = document.createElement('input');
+    togglePromptSearch.id = 'custom_preset_show_prompt_search_feature';
+    togglePromptSearch.type = 'checkbox';
+    togglePromptSearch.className = 'extension_enabled';
+    togglePromptSearch.checked = settings.showPromptSearchFeature !== false;
+    const textSearch = document.createElement('span');
+    textSearch.innerHTML = `<strong>${L.enablePromptSearch}</strong>`;
+    rowSearch.appendChild(togglePromptSearch);
+    rowSearch.appendChild(textSearch);
+
+    const noteSearch = document.createElement('small');
+    noteSearch.className = 'notes';
+    noteSearch.textContent = L.enablePromptSearchNote;
+
+    togglePromptSearch.addEventListener('change', () => {
+        settings.showPromptSearchFeature = !!togglePromptSearch.checked;
         saveFeatureSettings();
         applyFeatureVisibility();
     });
@@ -496,6 +520,8 @@ export function createExtensionSettingsMenu() {
     drawerContent.appendChild(noteGroup);
     drawerContent.appendChild(row4);
     drawerContent.appendChild(note4);
+    drawerContent.appendChild(rowSearch);
+    drawerContent.appendChild(noteSearch);
     drawerContent.appendChild(row5);
     drawerContent.appendChild(note5);
     drawerContent.appendChild(row6);
@@ -577,6 +603,8 @@ export function applyFeatureVisibility() {
     if (positionBlock) {
         positionBlock.style.display = settings.showPromptPositionFeature !== false ? '' : 'none';
     }
+
+    ensurePromptSearchControls();
 
     // 이 함수는 마지막에 renderQuickToggleButtons()를 부른다.
     // 키워드 쪽에서 예외가 나면 그 뒤가 전부 안 돌아 엉뚱한 기능이 사라지므로 격리한다.

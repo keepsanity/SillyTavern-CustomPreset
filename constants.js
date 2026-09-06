@@ -43,6 +43,8 @@ export const FEATURE_DEFAULTS = {
     showQuickToggleGroupFeature: false,
     quickPromptToggleBarCollapsed: false,
     showPromptPositionFeature: true,
+    // 프롬프트 편집창의 단어검색 버튼
+    showPromptSearchFeature: true,
     showTogglePresetFeature: true,
     showLinkedPresetFeature: true,
     autoSavePreset: false,
