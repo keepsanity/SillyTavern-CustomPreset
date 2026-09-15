@@ -8,6 +8,10 @@
     "author": "keepsanity",
     "version": "1.6.0",
     "homePage": "",
-    "auto_update": false
+    "auto_update": false,
+    "i18n": {
+        "en": "locales/en.json",
+        "ko": "locales/ko.json",
+        "ko-kr": "locales/ko.json"
+    }
 }
-
