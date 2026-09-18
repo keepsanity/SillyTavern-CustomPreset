@@ -2,6 +2,7 @@
 // ST 편집창에 각 기능의 칸을 꽂고, 저장 시 후처리를 순서대로 돌린다.
 // 후처리는 기능별로 격리되어 하나가 실패해도 나머지는 진행된다.
 import { promptManager } from '../../../openai.js';
+import { translate } from '../../../i18n.js';
 import { EXTENSION_NAME, QUICK_TOGGLE_ENABLED_KEY, QUICK_TOGGLE_NAME_KEY } from './constants.js';
 import { applyKeywordTriggerToPrompt, loadKeywordTriggerFormForPrompt, resetKeywordTriggerDraft } from './keyword-trigger.js';
 import { loadPositionSelectForPrompt, movePromptToPosition } from './prompt-position.js';
@@ -12,7 +13,39 @@ import { ensureTranslateButtonInPopup } from './translate.js';
 
 let quickPopupObserver = null;
 
+function ensurePromptExpandButton() {
+    const editPopup = document.getElementById('completion_prompt_manager_popup_edit');
+    const textareaId = 'completion_prompt_manager_popup_entry_form_prompt';
+    const label = editPopup?.querySelector(`label[for="${textareaId}"]`);
+    const container = label?.closest('.flex1');
+    if (!container || !document.getElementById(textareaId)) return;
+    if (editPopup.querySelector(`.editor_maximize[data-for="${textareaId}"]`)) return;
+
+    // Reuse the character editor's delegated handler, including live input sync.
+    const button = document.createElement('button');
+    button.id = 'custom_preset_prompt_expand';
+    button.type = 'button';
+    button.className = 'editor_maximize menu_button';
+    const icon = document.createElement('i');
+    icon.className = 'fa-solid fa-maximize';
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    button.dataset.for = textareaId;
+    button.title = translate('Expand the editor');
+    button.setAttribute('aria-label', button.title);
+    button.setAttribute('data-i18n', '[title]Expand the editor;[aria-label]Expand the editor');
+    button.addEventListener('click', (event) => {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea || textarea.disabled || textarea.readOnly) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+    container.appendChild(button);
+}
+
 export function loadQuickToggleFormForPrompt(promptId) {
+    ensurePromptExpandButton();
     ensureQuickTogglePopupControls();
     loadPositionSelectForPrompt(promptId);
     ensureTranslateButtonInPopup();
