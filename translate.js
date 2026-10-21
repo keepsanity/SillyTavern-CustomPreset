@@ -1,33 +1,25 @@
-// 프롬프트 번역. 커넥션 프로파일로 번역을 돌리고 결과를 확장 설정에 캐시한다.
-import { getFeatureSettings, saveFeatureSettings } from './settings-store.js';
+// 프롬프트 번역. 커넥션 프로파일로 번역을 돌리고 결과를 사용자별 JSON 파일에 저장한다.
+import { getFeatureSettings } from './settings-store.js';
 import { L } from './translations.js';
 
+import { getStoredTranslations, updateStoredTranslations } from './translation-storage.js';
+
 function getStoredTranslation(promptId) {
-    const settings = getFeatureSettings();
-    if (!settings.translations || typeof settings.translations !== 'object') return null;
-    const entry = settings.translations[promptId];
-    if (!entry || !entry.translated) return null;
-    return entry;
+    const entry = getStoredTranslations()[promptId];
+    return entry?.translated ? entry : null;
 }
 
-function setStoredTranslation(promptId, original, translated) {
-    const settings = getFeatureSettings();
-    if (!settings.translations || typeof settings.translations !== 'object') {
-        settings.translations = {};
-    }
-    settings.translations[promptId] = {
-        original,
-        translated,
-        translatedAt: Date.now(),
-    };
-    saveFeatureSettings();
+async function setStoredTranslation(promptId, original, translated) {
+    await updateStoredTranslations(data => {
+        Object.defineProperty(data, promptId, {
+            value: { original, translated, translatedAt: Date.now() },
+            enumerable: true, writable: true, configurable: true,
+        });
+    });
 }
 
-function deleteStoredTranslation(promptId) {
-    const settings = getFeatureSettings();
-    if (!settings.translations || typeof settings.translations !== 'object') return;
-    delete settings.translations[promptId];
-    saveFeatureSettings();
+async function deleteStoredTranslation(promptId) {
+    await updateStoredTranslations(data => { delete data[promptId]; });
 }
 
 function buildTranslationPrompt(content) {
@@ -85,7 +77,7 @@ async function translatePromptContent(promptId, content) {
         translated = (translated || '').trim();
         if (!translated) throw new Error('empty response');
 
-        setStoredTranslation(promptId, content, translated);
+        await setStoredTranslation(promptId, content, translated);
         toastr.success(L.translateSuccess);
         return translated;
     } catch (err) {
@@ -271,11 +263,19 @@ export function ensureTranslateButtonInPopup() {
             deleteBtn.className = 'menu_button custom_preset_translate_btn custom_preset_translate_delete_btn';
             deleteBtn.title = L.deleteTranslation;
             deleteBtn.innerHTML = `<i class="fa-solid fa-trash"></i>`;
-            deleteBtn.addEventListener('click', (e) => {
+            deleteBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (!confirm(L.deleteTranslationConfirm)) return;
-                deleteStoredTranslation(promptId);
+                deleteBtn.disabled = true;
+                try {
+                    await deleteStoredTranslation(promptId);
+                } catch (error) {
+                    console.error('[CustomPreset] Translation delete failed:', error);
+                    toastr.error(L.translateFailed(error.message || String(error)));
+                    deleteBtn.disabled = false;
+                    return;
+                }
                 toastr.success(L.translationDeleted);
                 renderButtons();
             });

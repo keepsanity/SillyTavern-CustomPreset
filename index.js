@@ -9,7 +9,9 @@
 //   L3  index.js (이 파일)
 // 아래 레이어가 위를 부르면 순환이 생기므로 하지 않는다.
 import { eventSource, event_types } from '../../../../script.js';
+import { initTranslationStorage } from './translation-storage.js';
 import { EXTENSION_NAME } from './constants.js';
+import { initToggleStorage } from './toggle-storage.js';
 import { getActivePresetName } from './preset-utils.js';
 import { ensureKeywordTriggerPatch } from './keyword-trigger.js';
 import { ensureQuickToggleCollapseButton, ensureQuickTogglePopupControls, renderQuickToggleButtons } from './quick-toggle.js';
@@ -48,6 +50,15 @@ async function init() {
 
     if (!document.getElementById('completion_prompt_manager')) {
         console.warn(`[${EXTENSION_NAME}] completion_prompt_manager not found after waiting`);
+        return;
+    }
+
+    try {
+        await initToggleStorage();
+        await initTranslationStorage();
+    } catch (error) {
+        console.error('[CustomPreset] Storage initialization failed:', error);
+        toastr.error('프리셋 데이터 파일을 불러오지 못했습니다. 파일 및 연결을 확인한 뒤 새로고침해 주세요.', 'Custom Preset');
         return;
     }
 

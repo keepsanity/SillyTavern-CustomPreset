@@ -63,5 +63,4 @@ export const FEATURE_DEFAULTS = {
     keywordTriggerScanDepth: KEYWORD_TRIGGER_DEFAULT_DEPTH,
     translationProfileId: '',
     translationPromptTemplate: '',
-    translations: {},
 };

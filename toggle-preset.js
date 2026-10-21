@@ -1,5 +1,5 @@
 // 토글 프리셋: 프롬프트 on/off 조합을 이름 붙여 저장하고 전환한다.
-// 같은 프리셋 안에서만 쓰이며, 저장 위치는 확장 설정(로컬)이다.
+// 같은 프리셋 안에서만 쓰이며, 조합은 사용자별 파일에 저장한다.
 import { promptManager } from '../../../openai.js';
 import { GLOBAL_PROMPT_CHARACTER_ID } from './constants.js';
 import { getActivePresetName, getPresetByName } from './preset-utils.js';
@@ -8,13 +8,8 @@ import { renderQuickToggleButtons } from './quick-toggle.js';
 import { getFeatureSettings, saveFeatureSettings } from './settings-store.js';
 import { L } from './translations.js';
 
-export function getTogglePresetsStorage() {
-    const settings = getFeatureSettings();
-    if (!settings.togglePresets || typeof settings.togglePresets !== 'object') {
-        settings.togglePresets = {};
-    }
-    return settings.togglePresets;
-}
+import { getTogglePresetsStorage, updateTogglePresets, reportToggleStorageError } from './toggle-storage.js';
+export { getTogglePresetsStorage };
 
 function getActiveTogglePresetTracker() {
     const settings = getFeatureSettings();
@@ -24,16 +19,19 @@ function getActiveTogglePresetTracker() {
     return settings.activeTogglePreset;
 }
 
-function getTogglePresetsForPreset(presetName) {
+async function getTogglePresetsForPreset(presetName) {
     if (!presetName) return {};
-    const storage = getTogglePresetsStorage();
-    if (!storage[presetName]) {
-        storage[presetName] = {
-            'default': captureCurrentToggleState(),
-        };
-        saveFeatureSettings();
+    if (!Object.hasOwn(getTogglePresetsStorage(), presetName)) {
+        const snapshot = captureCurrentToggleState();
+        await updateTogglePresets(storage => {
+            if (!Object.hasOwn(storage, presetName)) {
+                Object.defineProperty(storage, presetName, {
+                    value: { default: snapshot }, enumerable: true, writable: true, configurable: true,
+                });
+            }
+        });
     }
-    return storage[presetName];
+    return getTogglePresetsStorage()[presetName];
 }
 
 function getActiveTogglePresetName(presetName) {
@@ -68,7 +66,7 @@ export function applyTogglePresetSnapshot(snapshot) {
     if (!entry?.order) return;
     let changed = false;
     for (const item of entry.order) {
-        if (snapshot.hasOwnProperty(item.identifier)) {
+        if (Object.hasOwn(snapshot, item.identifier)) {
             const desired = !!snapshot[item.identifier];
             if (item.enabled !== desired) {
                 item.enabled = desired;
@@ -91,7 +89,7 @@ export function reapplyActiveTogglePreset(presetName) {
     if (getFeatureSettings().showTogglePresetFeature === false) return;
     const active = getActiveTogglePresetName(presetName);
     if (active === 'default') return;
-    const presets = getTogglePresetsForPreset(presetName);
+    const presets = getTogglePresetsStorage()[presetName] || {};
     if (presets[active]) {
         applyTogglePresetSnapshot(presets[active]);
     }
@@ -99,25 +97,30 @@ export function reapplyActiveTogglePreset(presetName) {
 
 // ========== Toggle Preset CRUD ==========
 
-function createTogglePreset() {
+async function createTogglePreset() {
     const presetName = getActivePresetName();
     if (!presetName) return;
     const name = prompt(L.togglePresetNew);
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
-    const presets = getTogglePresetsForPreset(presetName);
-    if (presets[trimmed]) {
+    const snapshot = captureCurrentToggleState();
+    const presets = await getTogglePresetsForPreset(presetName);
+    if (Object.hasOwn(presets, trimmed)) {
         toastr.warning(L.togglePresetNameExists);
         return;
     }
-    presets[trimmed] = captureCurrentToggleState();
+    await updateTogglePresets(storage => {
+        Object.defineProperty(storage[presetName], trimmed, {
+            value: snapshot, enumerable: true, writable: true, configurable: true,
+        });
+    });
     setActiveTogglePresetName(presetName, trimmed);
     saveFeatureSettings();
-    populateTogglePresetSelect(presetName);
+    await populateTogglePresetSelect(getActivePresetName());
     toastr.success(L.togglePresetCreated(trimmed));
 }
 
-function renameTogglePreset() {
+async function renameTogglePreset() {
     const presetName = getActivePresetName();
     if (!presetName) return;
     const current = getActiveTogglePresetName(presetName);
@@ -128,20 +131,24 @@ function renameTogglePreset() {
     const newName = prompt(L.togglePresetRename, current);
     if (!newName || !newName.trim() || newName.trim() === current) return;
     const trimmed = newName.trim();
-    const presets = getTogglePresetsForPreset(presetName);
-    if (presets[trimmed]) {
+    const presets = await getTogglePresetsForPreset(presetName);
+    if (Object.hasOwn(presets, trimmed)) {
         toastr.warning(L.togglePresetNameExists);
         return;
     }
-    presets[trimmed] = presets[current];
-    delete presets[current];
+    await updateTogglePresets(storage => {
+        Object.defineProperty(storage[presetName], trimmed, {
+            value: storage[presetName][current], enumerable: true, writable: true, configurable: true,
+        });
+        delete storage[presetName][current];
+    });
     setActiveTogglePresetName(presetName, trimmed);
     saveFeatureSettings();
-    populateTogglePresetSelect(presetName);
+    await populateTogglePresetSelect(getActivePresetName());
     toastr.success(L.togglePresetRenamed(current, trimmed));
 }
 
-function deleteTogglePreset() {
+async function deleteTogglePreset() {
     const presetName = getActivePresetName();
     if (!presetName) return;
     const current = getActiveTogglePresetName(presetName);
@@ -150,30 +157,36 @@ function deleteTogglePreset() {
         return;
     }
     if (!confirm(L.togglePresetDeleteConfirm(current))) return;
-    const presets = getTogglePresetsForPreset(presetName);
-    delete presets[current];
+    const presets = await getTogglePresetsForPreset(presetName);
+    await updateTogglePresets(storage => { delete storage[presetName][current]; });
     setActiveTogglePresetName(presetName, 'default');
     saveFeatureSettings();
-    populateTogglePresetSelect(presetName);
-    if (presets['default']) {
+    await populateTogglePresetSelect(getActivePresetName());
+    if (getActivePresetName() === presetName && presets['default']) {
         applyTogglePresetSnapshot(presets['default']);
     }
     toastr.success(L.togglePresetDeleted(current));
 }
 
-function saveCurrentStateToTogglePreset() {
+async function saveCurrentStateToTogglePreset() {
     const presetName = getActivePresetName();
     if (!presetName) return;
     const current = getActiveTogglePresetName(presetName);
-    const presets = getTogglePresetsForPreset(presetName);
-    presets[current] = captureCurrentToggleState();
-    saveFeatureSettings();
+    const snapshot = captureCurrentToggleState();
+    await getTogglePresetsForPreset(presetName);
+    await updateTogglePresets(storage => { storage[presetName][current] = snapshot; });
     toastr.success(L.togglePresetSaved(current === 'default' ? L.togglePresetDefault : current));
 }
 
 // ========== Toggle Preset UI ==========
 
+let populateRequest = 0;
 export function populateTogglePresetSelect(presetName) {
+    return populateTogglePresetSelectAsync(presetName).catch(reportToggleStorageError);
+}
+
+async function populateTogglePresetSelectAsync(presetName) {
+    const request = ++populateRequest;
     const select = document.getElementById('custom_preset_toggle_preset_select');
     if (!select) return;
     select.innerHTML = '';
@@ -184,7 +197,9 @@ export function populateTogglePresetSelect(presetName) {
         select.appendChild(option);
         return;
     }
-    const presets = getTogglePresetsForPreset(presetName);
+    const presets = await getTogglePresetsForPreset(presetName);
+    if (request !== populateRequest) return;
+    select.innerHTML = '';
     const active = getActiveTogglePresetName(presetName);
     const names = Object.keys(presets);
     const sorted = ['default', ...names.filter(n => n !== 'default').sort()];
@@ -198,14 +213,15 @@ export function populateTogglePresetSelect(presetName) {
     }
 }
 
-function onTogglePresetSelectChange() {
+async function onTogglePresetSelectChange() {
     const select = document.getElementById('custom_preset_toggle_preset_select');
     if (!select) return;
     const presetName = getActivePresetName();
     if (!presetName) return;
     const toggleName = select.value;
+    const presets = await getTogglePresetsForPreset(presetName);
+    if (getActivePresetName() !== presetName) return;
     setActiveTogglePresetName(presetName, toggleName);
-    const presets = getTogglePresetsForPreset(presetName);
     const snapshot = presets[toggleName];
     if (snapshot) {
         applyTogglePresetSnapshot(snapshot);
@@ -215,6 +231,20 @@ function onTogglePresetSelectChange() {
     if (panelSelect) {
         renderPromptList(getPresetByName(panelSelect.value));
     }
+}
+
+function handleToggleAction(action) {
+    return async () => {
+        const controls = [...document.querySelectorAll('#custom_preset_toggle_preset_section button, #custom_preset_toggle_preset_section select')];
+        controls.forEach(control => { control.disabled = true; });
+        try {
+            await action();
+        } catch (error) {
+            reportToggleStorageError(error);
+        } finally {
+            controls.forEach(control => { control.disabled = false; });
+        }
+    };
 }
 
 export function createTogglePresetUI() {
@@ -232,30 +262,30 @@ export function createTogglePresetUI() {
     const select = document.createElement('select');
     select.id = 'custom_preset_toggle_preset_select';
     select.className = 'text_pole';
-    select.addEventListener('change', onTogglePresetSelectChange);
+    select.addEventListener('change', handleToggleAction(onTogglePresetSelectChange));
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'menu_button';
     saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
     saveBtn.title = L.togglePresetSave;
-    saveBtn.addEventListener('click', saveCurrentStateToTogglePreset);
+    saveBtn.addEventListener('click', handleToggleAction(saveCurrentStateToTogglePreset));
 
     const editBtn = document.createElement('button');
     editBtn.className = 'menu_button';
     editBtn.innerHTML = '<i class="fa-solid fa-pencil"></i>';
     editBtn.title = L.togglePresetRenameTitle;
-    editBtn.addEventListener('click', renameTogglePreset);
+    editBtn.addEventListener('click', handleToggleAction(renameTogglePreset));
 
     const addBtn = document.createElement('button');
     addBtn.className = 'menu_button';
     addBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
     addBtn.title = L.togglePresetNewTitle;
-    addBtn.addEventListener('click', createTogglePreset);
+    addBtn.addEventListener('click', handleToggleAction(createTogglePreset));
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'menu_button';
     deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-    deleteBtn.addEventListener('click', deleteTogglePreset);
+    deleteBtn.addEventListener('click', handleToggleAction(deleteTogglePreset));
 
     row.appendChild(select);
     row.appendChild(saveBtn);
