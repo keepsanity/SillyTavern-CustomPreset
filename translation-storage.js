@@ -12,7 +12,7 @@ export async function initTranslationStorage() {
         saveSettings: saveFeatureSettings,
         ...jsonFileTransport('SillyTavern-CustomPreset-translations.json', getRequestHeaders),
     });
-    await store.init();
+    return store.init();
 }
 export function getStoredTranslations() { return store.get(); }
 export function updateStoredTranslations(edit) { return store.update(edit); }

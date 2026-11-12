@@ -44,11 +44,15 @@ export function createToggleStorage({ read, write, settings, saveSettings }) {
                 delete settings.togglePresets;
                 saveSettings();
             } else {
-                if (!saved && settings.togglePresetsFileVersion) {
-                    throw new Error('The toggle preset file is missing; restore it from backup');
-                }
                 data = existing;
+                // A deleted file starts empty; restoring the file later still wins on reload.
+                if (!saved && settings.togglePresetsFileVersion) {
+                    delete settings.togglePresetsFileVersion;
+                    saveSettings();
+                    return { missing: true };
+                }
             }
+            return { missing: false };
         },
         get() {
             if (!data) throw new Error('Toggle preset storage is not ready');

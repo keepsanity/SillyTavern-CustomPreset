@@ -54,8 +54,10 @@ async function init() {
     }
 
     try {
-        await initToggleStorage();
-        await initTranslationStorage();
+        const missing = [await initToggleStorage(), await initTranslationStorage()].some(r => r?.missing);
+        if (missing) {
+            toastr.warning('저장된 토글 프리셋/번역 파일이 없어 빈 상태로 시작합니다. 백업이 있으면 user/files 폴더에 넣고 새로고침하세요.', 'Custom Preset');
+        }
     } catch (error) {
         console.error('[CustomPreset] Storage initialization failed:', error);
         toastr.error('프리셋 데이터 파일을 불러오지 못했습니다. 파일 및 연결을 확인한 뒤 새로고침해 주세요.', 'Custom Preset');

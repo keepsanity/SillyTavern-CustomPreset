@@ -32,7 +32,7 @@ export async function initToggleStorage() {
             if (!response.ok) throw new Error(`Write failed: ${response.status}`);
         },
     });
-    await store.init();
+    return store.init();
 }
 
 export function getTogglePresetsStorage() {

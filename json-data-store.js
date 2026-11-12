@@ -28,13 +28,19 @@ export function createJsonDataStore({ settings, key, empty, validate, merge, rea
                 settings[marker] = 1;
                 saveSettings();
             } else {
-                if (!saved && settings[marker]) throw new Error(`${key} file is missing; restore from backup`);
                 data = existing;
+                // A deleted file starts empty; restoring the file later still wins on reload.
+                if (!saved && settings[marker]) {
+                    delete settings[marker];
+                    saveSettings();
+                    return { missing: true };
+                }
                 if (saved && !settings[marker]) {
                     settings[marker] = 1;
                     saveSettings();
                 }
             }
+            return { missing: false };
         },
         get() {
             if (data === undefined) throw new Error(`${key} storage is not ready`);
